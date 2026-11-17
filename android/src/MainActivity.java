@@ -5,12 +5,16 @@ import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.print.PrintAttributes;
+import android.print.PrintDocumentAdapter;
+import android.print.PrintManager;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.webkit.DownloadListener;
@@ -44,6 +48,32 @@ public class MainActivity extends Activity {
      * API 29+, legacy public Downloads dir below) off the UI thread.
      */
     public class SunBridge {
+        /**
+         * Print bridge (v1.6): the page's Save action is a print flow first.
+         * SunBridge.print() opens the Android system print dialog for the
+         * WebView; the page's print stylesheet makes the output exactly the
+         * annual report sheet on one A4 portrait page, and the user picks
+         * "Save as PDF" in the dialog. Must run on the UI thread.
+         */
+        @JavascriptInterface
+        public void print() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        PrintManager pm = (PrintManager) getSystemService(Context.PRINT_SERVICE);
+                        String jobName = "Sun Annual Report";
+                        PrintDocumentAdapter adapter = web.createPrintDocumentAdapter(jobName);
+                        pm.print(jobName, adapter, new PrintAttributes.Builder()
+                                .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                                .build());
+                    } catch (Exception e) {
+                        showToast("列印失敗：" + e.getMessage());
+                    }
+                }
+            });
+        }
+
         @JavascriptInterface
         public void saveFile(String filename, String mimeType, String base64) {
             final String name = sanitizeFilename(filename);

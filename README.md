@@ -37,18 +37,21 @@ data for any location — no server, all calculations run in the browser/WebView
 | File | What it is |
 |---|---|
 | `index.html` | The complete web app as one self-contained file (obfuscated release build — see the version history). Open it in any browser. |
-| `sun-tracking-smart-clock-v1.5.apk` | Android APK (WebView shell + the same `index.html` embedded). |
+| `sun-tracking-smart-clock-v1.6.apk` | Android APK (WebView shell + the same `index.html` embedded). |
 | `android/` | The APK build project (`build_apk.py`, `AndroidManifest.xml`, `src/MainActivity.java`). |
 
 ## Install the APK
 
-1. Download `sun-tracking-smart-clock-v1.5.apk` (from this repo or the
-   v1.5 Release) to an Android 8.0+ phone.
+1. Download `sun-tracking-smart-clock-v1.6.apk` (from this repo or the
+   v1.6 Release) to an Android 8.0+ phone.
 2. Open the file and allow "install from unknown sources" for the app you
    opened it with, if Android asks.
-3. In the app: GPS button asks for location permission; CSV/PDF saves are
+3. In the app: GPS button asks for location permission; CSV saves are
    written to the phone's **Download** folder by the shell's native bridge
-   (`SunBridge.saveFile`), with a confirmation toast.
+   (`SunBridge.saveFile`), with a confirmation toast. The annual report's
+   Save button opens the Android system print dialog (via the shell's
+   `SunBridge.print` bridge) — choose **Save as PDF** there to store the
+   report as a one-page A4 portrait PDF.
 
 ## Rebuild the APK
 
@@ -69,6 +72,23 @@ shell with aapt2/javac/d8 (no Gradle), and signs the APK.
 
 ## Version history
 
+- **v1.6** (versionCode 7) — The annual report now uses the **system
+  print route** instead of a generated PDF. On the user's phone the
+  generated-PDF approach kept disappointing: v1.4's new library path
+  failed silently, and v1.5's fallback produced a two-page PDF with the
+  table shrunk into a corner of oversized pages — while the user's own
+  print/screenshot output looked better. So the Save button is now a
+  print flow: in the APK, the shell's new `SunBridge.print()` bridge
+  opens the Android system print dialog with the WebView print adapter
+  (A4); in a browser, `window.print()` does the same. A print stylesheet
+  (`@page` A4 portrait + `@media print` rules that show only the report
+  sheet, scaled to the 190 mm printable width) makes the output exactly
+  the report sheet on **one A4 portrait page**, and the user picks
+  "Save as PDF" in the system dialog. The generated PDF (html2pdf) is
+  kept only as a last-resort fallback if both print routes are
+  unavailable, and the original print error is shown in the status line
+  rather than swallowed. Footer version line updated to
+  "Sun Tracking Clock V1.6".
 - **v1.5** (versionCode 6) — PDF save regression fixed. The previous
   version's new save path (a separate jsPDF library loaded from a CDN,
   plus a hand-built PDF document) silently failed in the phone's
