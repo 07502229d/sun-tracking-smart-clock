@@ -36,14 +36,14 @@ data for any location — no server, all calculations run in the browser/WebView
 
 | File | What it is |
 |---|---|
-| `index.html` | The complete web app as one self-contained file (obfuscated release build — see v1.3 note). Open it in any browser. |
-| `sun-tracking-smart-clock-v1.3.apk` | Android APK (WebView shell + the same `index.html` embedded). |
+| `index.html` | The complete web app as one self-contained file (obfuscated release build — see the version history). Open it in any browser. |
+| `sun-tracking-smart-clock-v1.4.apk` | Android APK (WebView shell + the same `index.html` embedded). |
 | `android/` | The APK build project (`build_apk.py`, `AndroidManifest.xml`, `src/MainActivity.java`). |
 
 ## Install the APK
 
-1. Download `sun-tracking-smart-clock-v1.3.apk` (from this repo or the
-   v1.3 Release) to an Android 8.0+ phone.
+1. Download `sun-tracking-smart-clock-v1.4.apk` (from this repo or the
+   v1.4 Release) to an Android 8.0+ phone.
 2. Open the file and allow "install from unknown sources" for the app you
    opened it with, if Android asks.
 3. In the app: GPS button asks for location permission; CSV/PDF saves are
@@ -69,6 +69,13 @@ shell with aapt2/javac/d8 (no Gradle), and signs the APK.
 
 ## Version history
 
+- **v1.4** (versionCode 5) — Annual report PDF now fits exactly one page:
+  the whole report sheet (title block, the full 36-row merged table and
+  the footnotes) is rendered as a single image and fitted — aspect ratio
+  preserved, centred — into one A3 landscape page. This replaces
+  html2pdf's automatic pagination, which had split the table across
+  pages and stranded the footnotes on a page of their own (three pages
+  in total). Footer version line updated to "Sun Tracking Clock V1.4".
 - **v1.3** (versionCode 4) — Release build: the published copy of the web
   app (this repo's `index.html`, the Netlify deploy and the APK's embedded
   page) is now obfuscated with the same pipeline used for the Liu Shu apps
