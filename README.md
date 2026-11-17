@@ -3,8 +3,8 @@
 A single-file web app (also packaged as an Android APK) that computes live solar
 data for any location — no server, all calculations run in the browser/WebView.
 
-**Web preview:** https://sun-tracking-smart-clock.netlify.app
-**Android package:** `hk.suntracking.clock`
+- **Web preview:** https://sun-tracking-smart-clock.netlify.app
+- **Android app:** package `hk.suntracking.clock` — download the APK from Releases
 
 ## Features
 
@@ -37,13 +37,13 @@ data for any location — no server, all calculations run in the browser/WebView
 | File | What it is |
 |---|---|
 | `index.html` | The complete web app as one self-contained file. Open it in any browser. |
-| `sun-tracking-smart-clock-v1.1.apk` | Android APK (WebView shell + the same `index.html` embedded). |
+| `sun-tracking-smart-clock-v1.2.apk` | Android APK (WebView shell + the same `index.html` embedded). |
 | `android/` | The APK build project (`build_apk.py`, `AndroidManifest.xml`, `src/MainActivity.java`). |
 
 ## Install the APK
 
-1. Download `sun-tracking-smart-clock-v1.1.apk` (from this repo or the
-   v1.1 Release) to an Android 8.0+ phone.
+1. Download `sun-tracking-smart-clock-v1.2.apk` (from this repo or the
+   v1.2 Release) to an Android 8.0+ phone.
 2. Open the file and allow "install from unknown sources" for the app you
    opened it with, if Android asks.
 3. In the app: GPS button asks for location permission; CSV/PDF saves are
@@ -69,6 +69,11 @@ shell with aapt2/javac/d8 (no Gradle), and signs the APK.
 
 ## Version history
 
+- **v1.2** (versionCode 3) — Legal block added at the end of the page:
+  acknowledgements, disclaimer and copyright statement, in all three UI
+  languages; the footer version line now tracks the latest release
+  version ("Sun Tracking Clock V1.2"); GitHub repo About description
+  corrected and the README web-preview / Android lines split into two.
 - **v1.1** (versionCode 2) — GPS permission-flow fix in the shell (the
   geolocation request is now held until the system permission result
   returns, so the first tap works); page geolocation errors split into

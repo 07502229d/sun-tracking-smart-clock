@@ -14,12 +14,12 @@ JAR = f"{SDK}/platforms/android-34/android.jar"
 ROOT = f"{HOME}/workspace/sun-tracking-android"
 KEYS = f"{HOME}/workspace/liu-shu-keys"
 HTML_IN = f"{HOME}/workspace/your_files/sun-tracking-smart-clock/sun-tracking-smart-clock.html"
-OUT = f"{HOME}/workspace/your_files/sun-tracking-smart-clock/sun-tracking-smart-clock-v1.1.apk"
+OUT = f"{HOME}/workspace/your_files/sun-tracking-smart-clock/sun-tracking-smart-clock-v1.2.apk"
 
 PACKAGE = "hk.suntracking.clock"
 LABEL = "Sun Tracking Smart Clock"
-VERSION_CODE = 2
-VERSION_NAME = "1.1"
+VERSION_CODE = 3
+VERSION_NAME = "1.2"
 BG = "#0d2b52"      # deep sky navy, matches the app theme
 GOLD = "#c9a227"
 SUN = "#ffd34d"

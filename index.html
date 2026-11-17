@@ -105,6 +105,11 @@
   html[lang="en"] nav.tabs button{letter-spacing:.01em}
   /* version line at the very end of the page */
   footer.verfoot{text-align:center;font-size:12px;padding:16px 2px 2px}
+  /* acknowledgements / disclaimer / copyright small print, directly above the version line */
+  .legalfoot{max-width:820px;margin:16px auto 0;padding:12px 4px 0;border-top:1px solid var(--line);font-size:11.5px;line-height:1.65;color:var(--dim)}
+  .legalfoot p{margin:0 0 6px}
+  .legalfoot p:last-child{margin-bottom:0}
+  .legalfoot b{color:#9db1d8;font-weight:700;margin-right:7px;white-space:nowrap}
   .pct{text-align:center;padding:8px 4px}
   .pct .n{font-family:var(--mono);font-size:clamp(34px,8vw,52px);font-weight:800;color:var(--yellow);line-height:1}
   .pct .l{font-size:13px;color:var(--dim);margin-top:6px;line-height:1.5}
@@ -422,7 +427,12 @@
     </div>
     </div>
   </section>
-  <footer class="verfoot" id="verFoot">Sun Tracking Clock V1.0</footer>
+  <div class="legalfoot" id="legalFoot">
+    <p><b id="ackH">鳴謝</b><span id="ackT">版面概念源自 Shivam Kundan 的 Raspberry Pi Pico 太陽鐘影片；太陽計算方法參考香港天文台刊載資料並核對；天氣數據由 Open-Meteo 及 wttr.in 提供；3D 天空穹頂使用 Three.js 函式庫。</span></p>
+    <p><b id="disH">免責聲明</b><span id="disT">本應用程式所有太陽數據均於裝置本機即時計算，僅供參考；天氣資料來自第三方來源，可能延遲或未能提供。本程式不適用於導航、航空或其他安全關鍵用途；權威天文數據請以香港天文台公佈為準。</span></p>
+    <p><b id="copyH">版權聲明</b><span id="copyT">© 2026 Sun Tracking Clock．版權所有，未經授權不得複製或再分發。</span></p>
+  </div>
+  <footer class="verfoot" id="verFoot">Sun Tracking Clock V1.2</footer>
 </div>
 
 <!-- PDF annual report preview overlay -->
@@ -528,7 +538,10 @@ var I18N={
  wxTitle:"🌦️ 天氣 · 跟隨目前地點",wxLoading:"正在取得天氣…",wxUnavailable:"未能取得天氣 — 可能離線或服務暫時不可用。太陽計算不受影響，仍可離線使用。",wxTemp:"現時氣溫",wxRange:"今日最低／最高",wxHum:"濕度",wxUV:"紫外線指數",wxUVMax:"今日最高",wxWind:"風速",wxSource:"資料來源：Open-Meteo",wxSrcPre:"資料來源：",wxTZ:"當地時區",wxDataTime:"資料時間",hko:"香港天文台即時天氣 →",
  uvLow:"低",uvMod:"中等",uvHigh:"高",uvVHigh:"甚高",uvExtreme:"極高",
  ev_nightEnd:"天文首光",ev_nauticalDawn:"航海首光",ev_dawn:"首光（民用）",ev_sunrise:"日出",ev_goldenHourEnd:"黃金時刻結束",ev_solarNoon:"日正午",ev_goldenHour:"黃金時刻開始",ev_sunset:"日落",ev_dusk:"尾光（民用）",ev_nauticalDusk:"航海暮光終",ev_night:"天文暮光終",ev_nadir:"日午夜",
- placeCustom:"自訂地點",placeGPS:"GPS 目前位置",gpsLocating:"定位中…",gpsFail:"定位失敗 — 請允許定位權限",gpsTimeout:"定位逾時 — 請重試",gpsUnavailable:"未能取得位置 — 請重試",gpsUnsupported:"此裝置不支援 GPS",version:"Sun Tracking Clock V1.0",
+ placeCustom:"自訂地點",placeGPS:"GPS 目前位置",gpsLocating:"定位中…",gpsFail:"定位失敗 — 請允許定位權限",gpsTimeout:"定位逾時 — 請重試",gpsUnavailable:"未能取得位置 — 請重試",gpsUnsupported:"此裝置不支援 GPS",version:"Sun Tracking Clock V1.2",
+ ackH:"鳴謝",ackT:"版面概念源自 Shivam Kundan 的 Raspberry Pi Pico 太陽鐘影片；太陽計算方法參考香港天文台刊載資料並核對；天氣數據由 Open-Meteo 及 wttr.in 提供；3D 天空穹頂使用 Three.js 函式庫。",
+ disH:"免責聲明",disT:"本應用程式所有太陽數據均於裝置本機即時計算，僅供參考；天氣資料來自第三方來源，可能延遲或未能提供。本程式不適用於導航、航空或其他安全關鍵用途；權威天文數據請以香港天文台公佈為準。",
+ copyH:"版權聲明",copyT:"© 2026 Sun Tracking Clock．版權所有，未經授權不得複製或再分發。",
  tzInfoA:"顯示時區 UTC",tzInfoB:"（跟隨所選地點）· 裝置時區",
  desc:["原版嘅核心概念：一眼睇晒成日 —— 太陽行到邊、下一個太陽事件幾時到。粗白線係地平線（0°），下面淺色線係 −6° 民用暮光界；兩線之間係暮光帶，之上係白天，−6° 之下係黑夜。","同一條高度曲線，加上五個關鍵時刻嘅垂直虛線，並將一日切成三段：首光之前嘅夜晚、首光至尾光嘅「光段」、尾光之後嘅夜晚。兩個大百分比係原版最聰明嘅設計 —— 唔使計時間，一眼知今日過咗幾多。","太陽落到地平線以下之後，天空唔會即刻全黑 —— 會逐級經過三種暮光。原版影片特別提到：一般網站只畀角度數字，唔解釋點解要分三種。呢頁補返「點解重要」。","側面視角：企喺地面嘅觀察者，視線直指太陽；虛線弧係太陽今日橫過天空嘅路徑，弧上標住小時／角度。高度角即係「太陽離地平線有幾高」—— 0° 喺地平線、90° 喺正頭頂（天頂）。","俯視羅盤：北喺正上，方位角由正北起順時針量度（東 90°、南 180°、西 270°）。外圍灰字係太陽到達各角度嘅時間；外圈白點係全年日出／日落方位嘅極值（夏至／冬至）。","立體 3D 天空穹頂：直接拖動旋轉視角，同時睇清太陽高度角、方位角、全日立體軌跡同地面影子方向。橙線係今日路徑，灰線係夏至／冬至路徑作對照。冇網絡載入唔到 3D 函式庫嗰陣，會自動退返 2D 穹頂圖。"],
  compass:["北","東北","東","東南","南","西南","西","西北"],
@@ -555,7 +568,10 @@ var I18N={
  wxTitle:"🌦️ 天气 · 跟随当前地点",wxLoading:"正在获取天气…",wxUnavailable:"未能取得天气 — 可能离线或服务暂时不可用。太阳计算不受影响，仍可离线使用。",wxTemp:"当前气温",wxRange:"今日最低／最高",wxHum:"湿度",wxUV:"紫外线指数",wxUVMax:"今日最高",wxWind:"风速",wxSource:"数据来源：Open-Meteo",wxSrcPre:"数据来源：",wxTZ:"当地时区",wxDataTime:"数据时间",hko:"香港天文台实时天气 →",
  uvLow:"低",uvMod:"中等",uvHigh:"高",uvVHigh:"甚高",uvExtreme:"极高",
  ev_nightEnd:"天文首光",ev_nauticalDawn:"航海首光",ev_dawn:"首光（民用）",ev_sunrise:"日出",ev_goldenHourEnd:"黄金时刻结束",ev_solarNoon:"日正午",ev_goldenHour:"黄金时刻开始",ev_sunset:"日落",ev_dusk:"尾光（民用）",ev_nauticalDusk:"航海暮光终",ev_night:"天文暮光终",ev_nadir:"日午夜",
- placeCustom:"自定义地点",placeGPS:"GPS 当前位置",gpsLocating:"定位中…",gpsFail:"定位失败 — 请允许定位权限",gpsTimeout:"定位超时 — 请重试",gpsUnavailable:"未能取得位置 — 请重试",gpsUnsupported:"此设备不支持 GPS",version:"Sun Tracking Clock V1.0",
+ placeCustom:"自定义地点",placeGPS:"GPS 当前位置",gpsLocating:"定位中…",gpsFail:"定位失败 — 请允许定位权限",gpsTimeout:"定位超时 — 请重试",gpsUnavailable:"未能取得位置 — 请重试",gpsUnsupported:"此设备不支持 GPS",version:"Sun Tracking Clock V1.2",
+ ackH:"鸣谢",ackT:"版面概念源自 Shivam Kundan 的 Raspberry Pi Pico 太阳钟视频；太阳计算方法参考香港天文台刊载资料并核对；天气数据由 Open-Meteo 及 wttr.in 提供；3D 天空穹顶使用 Three.js 函数库。",
+ disH:"免责声明",disT:"本应用程序所有太阳数据均于设备本地即时计算，仅供参考；天气资料来自第三方来源，可能延迟或未能提供。本程序不适用于导航、航空或其他安全关键用途；权威天文数据请以香港天文台公布为准。",
+ copyH:"版权声明",copyT:"© 2026 Sun Tracking Clock．版权所有，未经授权不得复制或再分发。",
  tzInfoA:"显示时区 UTC",tzInfoB:"（跟随所选地点）· 设备时区",
  desc:["原版的核心概念：一眼看完一整天 —— 太阳走到哪里、下一个太阳事件何时到。粗白线是地平线（0°），下面淡线是 −6° 民用暮光界；两线之间是暮光带，之上是白天，−6° 之下是黑夜。","同一条高度曲线，加上五个关键时刻的垂直虚线，并将一天切成三段：首光之前的夜晚、首光至尾光的「光段」、尾光之后的夜晚。两个大百分比是原版最聪明的设计 —— 不用算时间，一眼知道今天过了多少。","太阳落到地平线以下之后，天空不会立刻全黑 —— 会逐级经过三种暮光。原版视频特别提到：一般网站只给角度数字，不解释为何要分三种。这一页补上「为何重要」。","侧面视角：站在地面的观察者，视线直指太阳；虚线弧是太阳今天横过天空的路径，弧上标有小时／角度。高度角就是「太阳离地平线有多高」—— 0° 在地平线、90° 在正头顶（天顶）。","俯视罗盘：北在正上，方位角由正北起顺时针量度（东 90°、南 180°、西 270°）。外围灰字是太阳到达各角度的时间；外圈白点是全年日出／日落方位的极值（夏至／冬至）。","立体 3D 天空穹顶：直接拖动旋转视角，同时看清太阳高度角、方位角、全日立体轨迹与地面影子方向。橙线是今日路径，灰线是夏至／冬至路径作对照。无网络加载不到 3D 库时，会自动退回 2D 穹顶图。"],
  compass:["北","东北","东","东南","南","西南","西","西北"],
@@ -582,7 +598,10 @@ var I18N={
  wxTitle:"🌦️ Weather · follows current location",wxLoading:"Fetching weather…",wxUnavailable:"Weather unavailable — you may be offline or the service is temporarily unreachable. Solar calculations are unaffected and still work offline.",wxTemp:"Temperature now",wxRange:"Today's low / high",wxHum:"Humidity",wxUV:"UV index",wxUVMax:"Today's max",wxWind:"Wind speed",wxSource:"Source: Open-Meteo",wxSrcPre:"Source: ",wxTZ:"Local timezone",wxDataTime:"Data time",hko:"Hong Kong Observatory (HKO) live weather →",
  uvLow:"Low",uvMod:"Moderate",uvHigh:"High",uvVHigh:"Very High",uvExtreme:"Extreme",
  ev_nightEnd:"Astronomical dawn",ev_nauticalDawn:"Nautical dawn",ev_dawn:"First light (civil)",ev_sunrise:"Sunrise",ev_goldenHourEnd:"Golden hour end",ev_solarNoon:"Solar noon",ev_goldenHour:"Golden hour start",ev_sunset:"Sunset",ev_dusk:"Last light (civil)",ev_nauticalDusk:"Nautical dusk",ev_night:"Astronomical dusk",ev_nadir:"Solar midnight",
- placeCustom:"Custom location",placeGPS:"GPS current location",gpsLocating:"Locating…",gpsFail:"Location failed — please allow location permission",gpsTimeout:"Location timed out — please retry",gpsUnavailable:"Position unavailable — please retry",gpsUnsupported:"GPS not supported on this device",version:"Sun Tracking Clock V1.0",
+ placeCustom:"Custom location",placeGPS:"GPS current location",gpsLocating:"Locating…",gpsFail:"Location failed — please allow location permission",gpsTimeout:"Location timed out — please retry",gpsUnavailable:"Position unavailable — please retry",gpsUnsupported:"GPS not supported on this device",version:"Sun Tracking Clock V1.2",
+ ackH:"Acknowledgements",ackT:"Layout concept inspired by Shivam Kundan's Raspberry Pi Pico sun clock video; solar calculation methods cross-checked against Hong Kong Observatory publications; weather data provided by Open-Meteo and wttr.in; the 3D sky dome uses the Three.js library.",
+ disH:"Disclaimer",disT:"All solar data is computed locally on your device for reference only. Weather data comes from third-party sources and may be delayed or unavailable. Not for navigation, aviation or other safety-critical use; for authoritative astronomical data, please refer to the Hong Kong Observatory.",
+ copyH:"Copyright",copyT:"© 2026 Sun Tracking Clock. All rights reserved. No part of this app may be copied or redistributed without permission.",
  tzInfoA:"Display timezone UTC",tzInfoB:"(follows selected location) · Device timezone",
  desc:["The original's core idea: the whole day at a glance — where the sun is and when the next solar event arrives. The bold white line is the horizon (0°); the faint line below is the −6° civil-twilight boundary. Between them is the twilight band; above is daytime, below −6° is night.","The same altitude curve with vertical markers for five key moments, and the day split into three parts: night before first light, the 'light span' from first to last light, and night after last light. The two large percentages are the original's smartest touch — no arithmetic, just how much of today has passed.","After the sun drops below the horizon the sky does not go dark at once — it steps through three twilights. The video notes that most websites only give the angle numbers and never explain why there are three. This screen adds the 'why it matters'.","A side view: an observer on the ground looking straight at the sun; the dashed arc is the sun's path across today's sky, labelled with hours and angles. Altitude is simply how high the sun is above the horizon — 0° at the horizon, 90° directly overhead (the zenith).","A top-down compass: north at the top, azimuth measured clockwise from true north (east 90°, south 180°, west 270°). Grey labels around the edge show when the sun reaches each bearing; white dots mark the year's extreme sunrise/sunset bearings (the solstices).","Interactive 3D Alt/Az sky dome: drag to orbit and read altitude, azimuth, the full 3D sun path and the ground-shadow direction at once. Orange is today; grey lines are the solstice paths for comparison. If the 3D library cannot load (offline), it falls back to the 2D dome chart."],
  compass:["N","NE","E","SE","S","SW","W","NW"],
@@ -1196,6 +1215,12 @@ function applyLang(){
  var ccl=$("btnCsvClose"); if(ccl)ccl.textContent=t("csvClose");
  var cvt=$("btnCsvViewTable"); if(cvt)cvt.textContent=t("csvViewTable");
  var cvr=$("btnCsvViewRaw"); if(cvr)cvr.textContent=t("csvViewRaw");
+ var aH=$("ackH"); if(aH)aH.textContent=t("ackH");
+ var aT=$("ackT"); if(aT)aT.textContent=t("ackT");
+ var dH=$("disH"); if(dH)dH.textContent=t("disH");
+ var dT=$("disT"); if(dT)dT.textContent=t("disT");
+ var cH=$("copyH"); if(cH)cH.textContent=t("copyH");
+ var cT=$("copyT"); if(cT)cT.textContent=t("copyT");
  var vf=$("verFoot"); if(vf)vf.textContent=t("version");
  buildPresets(); renderWeather(); applyExtra();
 }
