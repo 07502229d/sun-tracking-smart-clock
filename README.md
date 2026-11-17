@@ -37,13 +37,13 @@ data for any location — no server, all calculations run in the browser/WebView
 | File | What it is |
 |---|---|
 | `index.html` | The complete web app as one self-contained file (obfuscated release build — see the version history). Open it in any browser. |
-| `sun-tracking-smart-clock-v1.4.apk` | Android APK (WebView shell + the same `index.html` embedded). |
+| `sun-tracking-smart-clock-v1.5.apk` | Android APK (WebView shell + the same `index.html` embedded). |
 | `android/` | The APK build project (`build_apk.py`, `AndroidManifest.xml`, `src/MainActivity.java`). |
 
 ## Install the APK
 
-1. Download `sun-tracking-smart-clock-v1.4.apk` (from this repo or the
-   v1.4 Release) to an Android 8.0+ phone.
+1. Download `sun-tracking-smart-clock-v1.5.apk` (from this repo or the
+   v1.5 Release) to an Android 8.0+ phone.
 2. Open the file and allow "install from unknown sources" for the app you
    opened it with, if Android asks.
 3. In the app: GPS button asks for location permission; CSV/PDF saves are
@@ -69,6 +69,20 @@ shell with aapt2/javac/d8 (no Gradle), and signs the APK.
 
 ## Version history
 
+- **v1.5** (versionCode 6) — PDF save regression fixed. The previous
+  version's new save path (a separate jsPDF library loaded from a CDN,
+  plus a hand-built PDF document) silently failed in the phone's
+  WebView — the preview opened, but no file was saved. The save path
+  now uses **only** the html2pdf bundle — the exact machinery that
+  saved successfully on-device in v1.3 — and the one-page A3 result is
+  achieved inside it: the report is captured once, staged into a
+  fixed-size fit box, and emitted as a single A3 landscape page. Two
+  safety nets were added: any save failure now shows the real error in
+  the status line ("Save failed: …") instead of failing silently, and
+  if the one-page generation throws, the save automatically retries
+  once with the plain v1.3-proven settings (multi-page if necessary)
+  and says so in the status line. Footer version line updated to
+  "Sun Tracking Clock V1.5".
 - **v1.4** (versionCode 5) — Annual report PDF now fits exactly one page:
   the whole report sheet (title block, the full 36-row merged table and
   the footnotes) is rendered as a single image and fitted — aspect ratio
