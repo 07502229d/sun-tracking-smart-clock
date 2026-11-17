@@ -1,0 +1,1439 @@
+<!doctype html>
+<html lang="zh-Hant-HK">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<link rel="icon" href="data:," />
+<meta name="theme-color" content="#060a18" />
+<title>Sun Tracking Smart Clock — 太陽追蹤智能鐘</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root{
+    --bg:#060a18; --bg2:#0a1128; --panel:rgba(255,255,255,.055); --panel2:rgba(255,255,255,.09);
+    --line:rgba(255,255,255,.14); --txt:#eef2ff; --dim:#9fb0d0; --cyan:#57d7ff; --orange:#ff9a2e;
+    --yellow:#ffd83d; --sun:#ffcf3f; --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:-apple-system,"PingFang HK","Microsoft JhengHei","Noto Sans TC",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:var(--sans);color:var(--txt);min-height:100vh;transition:background 1.2s ease;
+    background:linear-gradient(180deg,#04060f 0%,#0a1128 55%,#131a36 100%);}
+  body[data-phase="day"]{background:linear-gradient(180deg,#123a6b 0%,#1d5a8a 45%,#7a5a34 100%)}
+  body[data-phase="golden"]{background:linear-gradient(180deg,#1b1440 0%,#6b2d4a 45%,#c65a1e 100%)}
+  body[data-phase="twilight"]{background:linear-gradient(180deg,#0a0d2a 0%,#2a1e52 55%,#59331f 100%)}
+  body[data-phase="night"]{background:linear-gradient(180deg,#02040a 0%,#060a18 60%,#0a0f22 100%)}
+  button,[role="button"],select,summary,input:not([type="checkbox"],[type="radio"]){min-height:2.25rem}
+  input,select,button,summary,[role="button"]{scroll-margin-bottom:92px;scroll-margin-top:12px}
+  .wrap{max-width:1060px;margin:0 auto;padding:14px 14px 110px}
+  /* top bar */
+  .topbar{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;padding:6px 2px 12px;border-bottom:1px solid var(--line)}
+  .topbar .dow{font-size:13px;letter-spacing:.14em;color:var(--cyan);text-transform:uppercase;font-weight:700}
+  .topbar .date{font-size:26px;font-weight:800;line-height:1.1}
+  .topbar .loc{font-size:12.5px;color:var(--dim);margin-top:3px}
+  .clock{text-align:right}
+  .clock .t{font-family:var(--mono);font-size:30px;font-weight:700;color:var(--yellow);letter-spacing:.02em;line-height:1}
+  .clock .phase{font-size:12px;color:var(--cyan);margin-top:4px;font-weight:600}
+  /* controls */
+  .controls{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin:14px 0}
+  .controls h2{font-size:13px;letter-spacing:.1em;color:var(--cyan);margin:0 0 10px;text-transform:uppercase}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .row+.row{margin-top:10px}
+  label.f{font-size:12px;color:var(--dim);display:flex;flex-direction:column;gap:4px;flex:1 1 120px}
+  input,select{background:#0d1430;color:var(--txt);border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:15px;font-family:var(--mono);width:100%}
+  input[type="range"]{padding:0;accent-color:var(--orange)}
+  .btn{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:9px 14px;font-size:14px;font-weight:600;cursor:pointer;min-height:40px}
+  .btn:active{transform:scale(.97)}
+  .btn.primary{background:var(--orange);border-color:var(--orange);color:#1a0e00}
+  .btn.on{background:var(--yellow);border-color:var(--yellow);color:#1a1400}
+  .btn.small{padding:6px 11px;font-size:13px;min-height:36px}
+  .chiprow{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:999px;padding:7px 12px;font-size:13px;cursor:pointer;min-height:36px}
+  .chip.on{color:#0b0f1e;background:var(--cyan);border-color:var(--cyan);font-weight:700}
+  .scrubval{font-family:var(--mono);color:var(--yellow);font-size:15px;font-weight:700;white-space:nowrap}
+  .switch{display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;padding:6px 2px}
+  .switch input{width:20px;height:20px;accent-color:var(--orange)}
+  .hint{font-size:12px;color:var(--dim);line-height:1.55}
+  /* screens */
+  .screen{display:block;scroll-margin-top:10px}
+  @keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.screen{animation:none}body{transition:none}}
+  .shead{display:flex;align-items:baseline;gap:10px;margin:18px 0 4px;flex-wrap:wrap}
+  .shead .no{font-family:var(--mono);color:var(--orange);font-weight:800;font-size:14px;letter-spacing:.1em}
+  .shead h2{font-size:23px;margin:0;font-weight:800}
+  .shead .en{color:var(--dim);font-size:13px;letter-spacing:.12em;text-transform:uppercase}
+  .sdesc{color:var(--dim);font-size:14px;line-height:1.65;margin:0 0 12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+  .card h3{margin:0 0 10px;font-size:15px;color:var(--cyan)}
+  svg.chart{width:100%;height:auto;display:block}
+  .count{text-align:center;padding:22px 10px}
+  .count .ev{font-size:13.5px;color:var(--cyan);letter-spacing:.08em;font-weight:700;text-transform:uppercase}
+  .count .big{font-size:clamp(24px,5.6vw,34px);font-weight:800;line-height:1.25;margin:6px 0;white-space:nowrap}
+  .count .big b{color:var(--yellow);font-family:var(--mono);font-weight:800}
+  .count .at{font-size:16px;color:var(--txt)}
+  .count .at b{color:var(--orange);font-family:var(--mono)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .stat .k{font-size:12px;color:var(--dim);letter-spacing:.05em}
+  .stat .v{font-family:var(--mono);font-size:23px;font-weight:700;color:var(--yellow);margin-top:3px;line-height:1.15}
+  .stat .v small{font-size:13px;color:var(--dim);font-family:var(--sans);font-weight:400}
+  .stat .s{font-size:12px;color:var(--cyan);margin-top:2px}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  th,td{padding:9px 8px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--cyan);font-size:12.5px;letter-spacing:.06em}
+  td.num,th.num{text-align:right;font-family:var(--mono);white-space:nowrap}
+  td .sub{display:block;font-size:12px;color:var(--dim);font-family:var(--sans)}
+  /* Screen 3 twilight table: fixed proportional columns so all four columns (Stage / Dawn / Dusk / Duration) always fit the card — the auto layout let the nowrap monospace "Duration (each end)" header push the table past a phone viewport in English */
+  #tblTwilight{table-layout:fixed}
+  #tblTwilight th:nth-child(1),#tblTwilight td:nth-child(1){width:35%}
+  #tblTwilight th:nth-child(2),#tblTwilight td:nth-child(2){width:16.5%}
+  #tblTwilight th:nth-child(3),#tblTwilight td:nth-child(3){width:16.5%}
+  #tblTwilight th:nth-child(4),#tblTwilight td:nth-child(4){width:32%}
+  /* English countdown wording is much longer than the Chinese; let it wrap instead of overflowing on narrow phones (Chinese fits one line and is unaffected) */
+  html[lang="en"] .count .big{white-space:normal}
+  /* English (Latin) UI: the wide letter-tracking tuned for CJK makes English headings and labels look loose — tighten to near-normal when lang=en. Chinese modes keep the base values untouched. */
+  html[lang="en"] .topbar .dow{letter-spacing:.03em}
+  html[lang="en"] .controls h2{letter-spacing:.02em}
+  html[lang="en"] .shead .no{letter-spacing:.03em}
+  html[lang="en"] .shead .en{letter-spacing:.02em}
+  html[lang="en"] .count .ev{letter-spacing:.02em}
+  html[lang="en"] th{letter-spacing:.02em}
+  html[lang="en"] .stat .k{letter-spacing:.01em}
+  html[lang="en"] .grouplabel{letter-spacing:.02em}
+  html[lang="en"] .langbar .lb{letter-spacing:.02em}
+  html[lang="en"] nav.tabs button{letter-spacing:.01em}
+  /* version line at the very end of the page */
+  footer.verfoot{text-align:center;font-size:12px;padding:16px 2px 2px}
+  .pct{text-align:center;padding:8px 4px}
+  .pct .n{font-family:var(--mono);font-size:clamp(34px,8vw,52px);font-weight:800;color:var(--yellow);line-height:1}
+  .pct .l{font-size:13px;color:var(--dim);margin-top:6px;line-height:1.5}
+  .bar{height:10px;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden;margin-top:10px}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--orange),var(--yellow));border-radius:99px}
+  .why{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+  .why .w{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px}
+  .why .w b{color:var(--yellow);display:block;margin-bottom:5px;font-size:15px}
+  .why .w p{margin:0;font-size:13.5px;line-height:1.65;color:#cdd8f2}
+  .seg{display:flex;border-radius:10px;overflow:hidden;margin:10px 0 6px;min-height:44px;font-size:12px}
+  .seg div{display:flex;align-items:center;justify-content:center;text-align:center;padding:6px 4px;line-height:1.35;min-width:0}
+  .seg .n{background:#141c3d;color:#8fa3cc}.seg .t{background:#7a4416;color:#ffd9a8}.seg .d{background:#b96a12;color:#fff3df;font-weight:700}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--dim);margin-top:8px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  details{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 14px;margin-bottom:12px}
+  summary{cursor:pointer;font-weight:700;padding:10px 0;font-size:15px}
+  details p,details li{font-size:14px;line-height:1.7;color:#cdd8f2}
+  /* bottom nav */
+  nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(5,8,20,.92);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  nav.tabs .in{max-width:1060px;margin:0 auto;display:grid;grid-template-columns:repeat(6,1fr)}
+  nav.tabs button{background:none;border:0;color:var(--dim);padding:9px 2px 10px;font-size:11.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;min-height:56px;font-family:var(--sans)}
+  nav.tabs button .ic{font-size:19px;line-height:1}
+  nav.tabs button.on{color:var(--yellow);font-weight:700}
+  nav.tabs button.on .ic{filter:drop-shadow(0 0 6px rgba(255,216,61,.7))}
+  footer{color:var(--dim);font-size:12.5px;line-height:1.7;padding:18px 2px 4px}
+  footer a{color:var(--cyan)}
+  .vidbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+  .vidbox h3{margin:0 0 8px;color:var(--cyan);font-size:15px}
+  .vidbox p,.vidbox li{font-size:14px;line-height:1.7;color:#cdd8f2}
+  .vidbox ol{margin:6px 0;padding-left:20px}
+  @media (max-width:560px){ .clock .t{font-size:24px} .topbar .date{font-size:21px} th,td{padding:8px 5px;font-size:13.5px}
+    #tblTwilight th,#tblTwilight td{padding:8px 4px}
+    .wrap{padding-top:8px}
+    .langbar{padding:2px 0 0;gap:5px} .langbar .lb{display:none} .langbtn{padding:4px 10px;font-size:12.5px;min-height:32px}
+    .topbar{padding-bottom:5px}
+    #weatherCard{margin-top:8px;padding:8px 12px} #weatherCard h3{margin-bottom:3px}
+    .controls{padding:8px 10px;margin:8px 0} .controls h2{margin-bottom:2px}
+    .row+.row{margin-top:6px}
+    .quickrow .hint{display:none}
+    label.f{gap:2px}
+    input,select{padding:6px 8px}
+    .btn{padding:7px 12px;min-height:38px}
+    .controls label.f{flex-direction:row;align-items:center;gap:6px}
+    .controls label.f>span{flex:0 0 92px;line-height:1.3}
+    #labLat,#labLon{flex-basis:36px} }
+
+  .langbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:10px 0 2px}
+  .langbar .lb{font-size:12px;color:var(--dim);font-weight:700;letter-spacing:.06em}
+  .langbtn{background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:999px;padding:7px 13px;font-size:13.5px;cursor:pointer;min-height:38px;font-weight:600}
+  .langbtn.on{color:#0b0f1e;background:var(--yellow);border-color:var(--yellow);font-weight:800}
+  .wxgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:8px}
+  .wxbig{font-family:var(--mono);font-size:40px;font-weight:800;color:var(--yellow);line-height:1}
+  .grouplabel{font-size:12px;color:var(--cyan);font-weight:700;letter-spacing:.06em;margin:10px 0 5px}
+  .quickrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  select.locsel{appearance:auto;cursor:pointer}
+  .reflink{background:none;border:0;color:var(--dim);font-size:12.5px;cursor:pointer;padding:6px 2px;min-height:32px;text-decoration:underline;text-underline-offset:3px;text-align:left}
+  .reflink:hover{color:var(--cyan)}
+  .dome3d-wrap{position:relative;width:100%;height:380px;border-radius:12px;overflow:hidden;background:radial-gradient(circle at 50% 45%,#132046 0%,#050917 100%);touch-action:pan-y;cursor:grab}
+  .dome3d-wrap:active{cursor:grabbing}
+  .dome3d-wrap canvas{display:block}
+  .dome3d-hud{position:absolute;top:10px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;font-size:12px;color:var(--dim);gap:8px;flex-wrap:wrap;z-index:2}
+  .dome3d-pill{background:rgba(6,10,24,.78);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:8px;padding:5px 9px;color:var(--txt)}
+  .dome3d-below{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(6,10,24,.85);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:12.5px;color:var(--cyan);white-space:nowrap;pointer-events:none;z-index:2}
+  /* PDF annual report preview */
+  #pdfOverlay{position:fixed;inset:0;z-index:80;background:rgba(3,5,12,.9);overflow-y:auto;padding:16px 12px 40px}
+  #csvOverlay{position:fixed;inset:0;z-index:80;background:rgba(3,5,12,.92);overflow-y:auto;padding:16px 12px 40px}
+  .csvPanel{background:#ffffff;color:#16233f;border-radius:8px;padding:22px 22px 18px;box-shadow:0 4px 24px rgba(0,0,0,.45)}
+  .csvPanel h1{font-size:20px;margin:0 0 6px;color:#0b2a52}
+  .csvPanel .meta{font-size:13px;color:#44577a;line-height:1.7;margin:0 0 6px;word-break:break-all}
+  .csvPanel .meta b{color:#16233f}
+  .csvViewTabs{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+  .csvTableWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid #ccd6ea;border-radius:6px}
+  .csvTableWrap table{width:100%;border-collapse:collapse;min-width:1180px}
+  .csvTableWrap th,.csvTableWrap td{border-bottom:1px solid #ccd6ea;padding:6px 7px;font-size:11.5px;text-align:left;font-family:var(--mono);color:#16233f;white-space:nowrap}
+  .csvTableWrap th{color:#0b5fa5;font-family:var(--mono);font-size:11px;background:#eef3fb;position:sticky;top:0}
+  .csvTableWrap tr.term td{background:#fff3d0}
+  .csvRaw{font-family:var(--mono);font-size:11.5px;line-height:1.55;background:#0d1430;color:#dbe7ff;border-radius:8px;padding:14px;overflow:auto;max-height:68vh;white-space:pre;margin:0}
+  .rptWrap{position:relative;overflow:hidden;margin-bottom:18px;page-break-after:always;page-break-inside:avoid}
+  .rpt{background:#ffffff;color:#16233f;border-radius:8px;padding:28px 30px;width:1080px;max-width:none;transform-origin:top left;box-shadow:0 4px 24px rgba(0,0,0,.45)}
+  .rpt img.chartimg{width:100%;height:auto;display:block;margin:4px 0 4px}
+  .rpt .cap{font-size:12px;color:#44577a;margin:8px 0 2px}
+  .rpt h1{font-size:21px;margin:0 0 4px;color:#0b2a52}
+  .rpt h2{font-size:15px;margin:16px 0 8px;color:#0b5fa5}
+  .rpt .meta{font-size:12.5px;color:#44577a;line-height:1.7;margin:0}
+  .rpt table{width:100%;border-collapse:collapse}
+  .rpt th,.rpt td{border-bottom:1px solid #ccd6ea;padding:6px 5px;font-size:12px;text-align:right;font-family:var(--mono);color:#16233f;white-space:nowrap}
+  .rpt th{color:#0b5fa5;font-family:var(--sans);font-size:11.5px;letter-spacing:0}
+  .rpt td:first-child,.rpt th:first-child{text-align:left;font-family:var(--sans);font-weight:600}
+  .rpt td.lbl,.rpt th.lbl{text-align:left;font-family:var(--sans)}
+  .rpt tr.term td{background:#fff3d0}
+  .rpt tr.term td.lbl{font-weight:800;color:#8a5a00}
+  .rpt .foot{font-size:11px;color:#5a6c8f;line-height:1.7;margin:14px 0 0;word-break:break-all}
+  .rpt .pbreak{page-break-before:always}
+  @media (max-width:560px){.rpt th,.rpt td{font-size:12px}}
+</style>
+</head>
+<body data-phase="night">
+<div class="wrap">
+  <div class="langbar" role="group" aria-label="Language"><span class="lb">🌐 Language / 語言</span><button type="button" class="langbtn on" data-lang="zh-Hant">繁體中文（香港）</button><button type="button" class="langbtn" data-lang="zh-Hans">简体中文</button><button type="button" class="langbtn" data-lang="en">English</button></div>
+
+  <!-- ===== TOP BAR (Screen 1 header, shared) ===== -->
+  <div class="topbar">
+    <div>
+      <div class="dow" id="tbDow">—</div>
+      <div class="date" id="tbDate">—</div>
+      <div class="loc" id="tbLoc">—</div>
+    </div>
+    <div class="clock">
+      <div class="t" id="tbClock">--:--:--</div>
+      <div class="phase" id="tbPhase">—</div>
+      <div class="phase" id="tbUtc" style="color:var(--dim);font-size:11.5px;margin-top:2px">UTC --:--:--</div>
+    </div>
+  </div>
+
+  <!-- ===== WEATHER (directly under date/time header) ===== -->
+  <div class="card" id="weatherCard" style="margin-top:14px"><h3 id="wxTitle">🌦️ 天氣 · 跟隨目前地點</h3><div id="wxBody"><p class="hint" id="wxLoading">正在取得天氣…</p></div><p class="hint" id="wxMeta"></p></div>
+
+  <!-- ===== CONTROLS: location + time travel ===== -->
+  <section class="controls" aria-label="地點與時間控制">
+    <h2>📍 地點 · 🕐 時間旅行</h2>
+    <div class="row"><label class="f"><span id="worldLabel">世界城市</span><select class="locsel" id="selWorld" aria-label="World Cities"></select></label></div>
+    <div class="row">
+      <label class="f"><span id="labLat">緯度</span><input id="inLat" type="number" step="0.0001" min="-90" max="90"></label>
+      <label class="f"><span id="labLon">經度</span><input id="inLon" type="number" step="0.0001" min="-180" max="180"></label>
+      <button class="btn" id="btnGps" type="button">⌖ 用 GPS 定位</button>
+      <button class="btn" id="btnApply" type="button">套用座標</button>
+    </div>
+    <div class="row quickrow"><span class="hint" id="quickLabel">快捷：</span><button class="btn small" id="btnM1" type="button">−1h</button><button class="btn small" id="btnP1" type="button">+1h</button><button class="btn small" id="btnNoonJump" type="button">日正午</button>
+    </div>
+    <div class="row">
+      <label class="f" style="flex:1 1 150px"><span id="labDate">日期</span><input id="inDate" type="date"></label>
+      <label class="f" style="flex:2 1 220px"><span id="labScrub">時間</span><input id="inScrub" type="range" min="0" max="1439" step="1"></label>
+      <span class="scrubval" id="scrubVal">--:--</span>
+      <button class="btn small" id="btnPlay" type="button">▶ 播放</button>
+      <button class="btn small primary" id="btnNow" type="button">回到現在</button></div>
+    <div class="row">
+      <button class="btn primary" id="btnPdf" type="button">📄 預覽及匯出 PDF</button>
+      <button class="btn" id="btnCsv" type="button">📊 匯出資料檔 CSV（Excel／Revit）</button>
+    </div>
+    <div class="row" id="csvRow" style="margin-top:6px">
+      <span class="hint" id="csvStatus" role="status"></span>
+      <span id="csvLinkWrap"></span>
+    </div>
+    <div class="row">
+      <label class="switch"><input type="checkbox" id="chkCycle"> 自動輪播畫面（每 7 秒切換）</label>
+      <span class="hint" id="tzInfo"></span>
+    </div>
+    <div class="row" style="margin-top:2px"><span class="hint" id="pdfHint"></span></div>
+    <p class="hint" style="margin:8px 0 0">所有太陽數據喺你部裝置即時用 NOAA / SunCalc 太陽位置算法計算，唔使連線、唔經伺服器。拖動時間或改日期，六個畫面會同步更新 —— 原版裝置做得到嘅「翻看過去／預覽未來」，呢度變成觸控時間軸。</p>
+  </section>
+
+  <!-- ================= SCREEN 1 · MAIN ================= -->
+  <section class="screen active" id="scr1">
+    <div class="shead"><span class="no">1</span><h2 id="hScr1">太陽總覽</h2></div>
+    <p class="sdesc">原版嘅核心概念：一眼睇晒成日 —— 太陽行到邊、下一個太陽事件幾時到。粗白線係地平線（0°），下面淺色線係 −6° 民用暮光界；兩線之間係暮光帶，之上係白天，−6° 之下係黑夜。</p>
+    <div class="card">
+      <svg class="chart" id="chart1" viewBox="0 0 720 300" role="img" aria-label="全日太陽高度曲線圖"></svg>
+      <div class="legend">
+        <span><i style="background:#ff9a2e"></i><span data-leg="altCurve">太陽高度曲線</span></span>
+        <span><i style="background:#fff"></i><span data-leg="horizon">地平線 0°</span></span>
+        <span><i style="background:#57d7ff"></i><span data-leg="civil">民用暮光界 −6°</span></span>
+        <span><i style="background:#ffd83d;border-radius:50%"></i><span data-leg="sunNow">太陽現時位置</span></span>
+      </div>
+    </div>
+    <div class="card count">
+      <div class="ev" id="cdEv">下一個事件</div>
+      <div class="big" id="cdBig">—</div>
+      <div class="at" id="cdAt">—</div>
+      <div class="bar"><i id="cdBar" style="width:0%"></i></div>
+      <p class="hint" id="cdPrev" style="margin-top:10px"></p>
+    </div>
+    <div class="grid" id="s1Stats"></div>
+  </section>
+
+  <!-- ================= SCREEN 2 · DETAILS ================= -->
+  <section class="screen" id="scr2">
+    <div class="shead"><span class="no">2</span><h2 id="hScr2">日照詳情</h2></div>
+    <p class="sdesc">同一條高度曲線，加上五個關鍵時刻嘅垂直虛線，並將一日切成三段：首光之前嘅夜晚、首光至尾光嘅「光段」、尾光之後嘅夜晚。兩個大百分比係原版最聰明嘅設計 —— 唔使計時間，一眼知今日過咗幾多。</p>
+    <div class="card">
+      <svg class="chart" id="chart2" viewBox="0 0 720 300" role="img" aria-label="帶事件標記的太陽高度曲線"></svg>
+      <p class="hint" id="nowElev" style="margin:8px 0 0"></p>
+    </div>
+    <div class="card">
+      <h3>一日三段（以民用暮光首光／尾光為界）</h3>
+      <div class="seg" id="segBar"></div>
+      <div class="legend"><span><i style="background:#141c3d;border:1px solid var(--line)"></i>夜晚段</span><span><i style="background:#b96a12"></i>光段（含暮光）</span><span><i style="background:#7a4416"></i>暮光（每端）</span></div>
+      <p class="hint" id="segTxt"></p>
+    </div>
+    <div class="grid">
+      <div class="card pct"><div class="n" id="pctLight">—</div><div class="l" id="pctLightL">光段已過比例</div></div>
+      <div class="card pct"><div class="n" id="pctDay">—</div><div class="l" id="pctDayL">全日 24 小時已過比例</div></div>
+    </div>
+    <div class="card">
+      <h3>關鍵時刻</h3>
+      <table id="tblEvents"><tbody></tbody></table>
+    </div>
+  </section>
+
+  <!-- ================= SCREEN 3 · TWILIGHT ================= -->
+  <section class="screen" id="scr3">
+    <div class="shead"><span class="no">3</span><h2 id="hScr3">暮光</h2></div>
+    <p class="sdesc">太陽落到地平線以下之後，天空唔會即刻全黑 —— 會逐級經過三種暮光。原版影片特別提到：一般網站只畀角度數字，唔解釋點解要分三種。呢頁補返「點解重要」。</p>
+    <div class="card">
+      <svg class="chart" id="chart3" viewBox="0 0 720 300" role="img" aria-label="暮光帶太陽高度曲線"></svg>
+      <div class="legend"><span><i style="background:#fff"></i><span data-leg="sr0">0° 日出／日落</span></span><span><i style="background:#ffd83d"></i><span data-leg="civ6">−6° 民用</span></span><span><i style="background:#57d7ff"></i><span data-leg="nau12">−12° 航海</span></span><span><i style="background:#b48cff"></i><span data-leg="ast18">−18° 天文</span></span></div>
+    </div>
+    <div class="card">
+      <h3>三種暮光 · 起訖與時長</h3>
+      <table id="tblTwilight"><thead><tr><th>階段</th><th>早上</th><th>黃昏</th><th class="num">單端時長</th></tr></thead><tbody></tbody></table>
+      <p class="hint" id="twiTotals"></p>
+    </div>
+    <div class="card">
+      <h3>累積光段跨度（由短至長）</h3>
+      <div id="spanBars"></div>
+    </div>
+    <h3 style="color:var(--cyan);font-size:16px;margin:16px 0 10px">點解要分三種暮光？</h3>
+    <div class="why">
+      <div class="w"><b>民用暮光 · −6°</b><p>太陽落到地平線下 6° 以內，天空仲夠光做大部分戶外活動、睇清楚周圍，街燈通常喺呢段時間着起。日常作息、影相嘅「黃金時刻／藍調時刻」都喺呢一帶 —— 係同生活最貼身嘅一種。</p></div>
+      <div class="w"><b>航海暮光 · −12°</b><p>太陽低到 −12°，海上地平線仲勉強可見，天上最光嘅星已經出現 —— 以前水手就係靠呢段「星同海平線同時睇到」嘅時間用六分儀量星定位，所以叫航海暮光。之後海平線消失，航海定位就要靠其他方法。</p></div>
+      <div class="w"><b>天文暮光 · −18°</b><p>太陽低過 −18° 之後，佢嘅散射光對天空亮度嘅影響細到可忽略，天空先至係真正全黑 —— 銀河、暗弱深空天體要等到呢一刻先睇得清楚。天文台同觀星者以 −18° 為「天文夜」嘅開始同結束。</p></div>
+    </div>
+  </section>
+
+  <!-- ================= SCREEN 4 · ALTITUDE ================= -->
+  <section class="screen" id="scr4">
+    <div class="shead"><span class="no">4</span><h2 id="hScr4">高度角</h2></div>
+    <p class="sdesc">側面視角：企喺地面嘅觀察者，視線直指太陽；虛線弧係太陽今日橫過天空嘅路徑，弧上標住小時／角度。高度角即係「太陽離地平線有幾高」—— 0° 喺地平線、90° 喺正頭頂（天頂）。</p>
+    <div class="card">
+      <svg class="chart" id="chart4" viewBox="0 0 720 360" role="img" aria-label="觀察者側面高度角示意圖"></svg>
+    </div>
+    <div class="grid" id="s4Stats"></div>
+    <div class="card">
+      <h3>點樣用高度角？</h3>
+      <p style="font-size:14px;line-height:1.7;color:#cdd8f2;margin:0">高度角決定影子長短、太陽能板接收角度同紫外線強度：太陽越高，陽光穿過大氣層嘅路程越短，正午 UV 最強、影最短。呢頁同時列出全年極值 —— 夏至正午太陽最高、冬至最低，差距完全由你嘅緯度同地軸傾角（23.44°）決定，係理解季節嘅關鍵數字。</p>
+    </div>
+  </section>
+
+  <!-- ================= SCREEN 5 · AZIMUTH ================= -->
+  <section class="screen" id="scr5">
+    <div class="shead"><span class="no">5</span><h2 id="hScr5">方位角</h2></div>
+    <p class="sdesc">俯視羅盤：北喺正上，方位角由正北起順時針量度（東 90°、南 180°、西 270°）。外圍灰字係太陽到達各角度嘅時間；外圈白點係全年日出／日落方位嘅極值（夏至／冬至）。</p>
+    <div class="card">
+      <svg class="chart" id="chart5" viewBox="0 0 560 560" role="img" aria-label="方位角羅盤圖"></svg>
+    </div>
+    <div class="grid" id="s5Stats"></div>
+    <div class="card">
+      <h3>點樣用方位角？</h3>
+      <p style="font-size:14px;line-height:1.7;color:#cdd8f2;margin:0">方位角話你知太陽「喺邊個方向」：買樓睇座向、露台種植物、太陽能板朝向、影相預計光線方向都靠佢。留意日出方位全年會擺動 —— 夏至偏東北、冬至偏東南，擺幅喺香港約 ±24°，緯度越高擺得越勁。</p>
+    </div>
+  </section>
+
+    <!-- ================= SCREEN 6 · COMBINED SKY DOME (3D) ================= -->
+  <section class="screen" id="scr6">
+    <div class="shead"><span class="no">6</span><h2 id="hScr6">3D 天空穹頂</h2></div>
+    <p class="sdesc">影片 12:02 講者親口講嘅下一步：將高度角同方位角合併喺同一個立體空間。你可以直接用手指或滑鼠拖動旋轉 3D 天空穹頂 —— 地面羅盤標示東南西北，橙色立體弧線係太陽今日軌跡，黃色太陽會即時投射地面影子，灰線為夏至／冬至軌跡對照。</p>
+    <div class="card">
+      <div class="dome3d-wrap" id="dome3dContainer" hidden>
+        <div class="dome3d-hud">
+          <div class="dome3d-pill" id="dome3dHint">🖱️ 拖動旋轉 3D 視角 · 雙擊重設角度</div>
+          <div class="dome3d-pill" id="dome3dReadout">Alt —° · Az —°</div>
+        </div>
+        <div class="dome3d-below" id="dome3dBelow" hidden></div>
+      </div>
+      <svg class="chart" id="chart6" viewBox="0 0 560 560" role="img" aria-label="高度方位合併天空穹頂圖"></svg>
+      <div class="legend"><span><i style="background:#ff9a2e"></i><span data-leg="todayPath">今日太陽軌跡</span></span><span><i style="background:#8fa3cc"></i><span data-leg="solPaths">夏至／冬至軌跡</span></span><span><i style="background:#ffd83d;border-radius:50%"></i><span data-leg="sunShadow">太陽與地面投影</span></span></div>
+    </div>
+    <div class="grid" id="s6Stats"></div>
+  </section>
+
+<!-- ================= EXTRA: golden/blue, solar time, year ================= -->
+  <section style="margin-top:26px">
+    <div class="shead"><span class="no">✦</span><h2 id="hExtras">攝影時段 · 太陽時 · 全年</h2></div>
+    <div class="grid" id="extraStats"></div>
+    <div class="card">
+      <h3>全年一覽 —— 日長與正午高度角（今日以黃點標示）</h3>
+      <svg class="chart" id="chartYear" viewBox="0 0 720 240" role="img" aria-label="全年日長與正午高度角圖"></svg>
+      <div class="legend"><span><i style="background:#ff9a2e"></i><span data-leg="dayLenH">日長（小時）</span></span><span><i style="background:#57d7ff"></i><span data-leg="noonAltD">正午高度角（°）</span></span><span data-leg="yearMarks">｜ 虛線：春分 · 夏至 · 秋分 · 冬至</span></div>
+    </div>
+  </section>
+
+  <!-- ================= VIDEO SUMMARY (collapsed by default) ================= -->
+  <section style="margin-top:26px">
+    <p style="margin:0"><button type="button" class="reflink" id="btnRef" aria-expanded="false" aria-controls="refBody">▸ 參考資料：原版五個畫面 · 重點整理（影片總結）</button></p>
+    <div id="refBody" hidden>
+    <div class="shead"><span class="no">▸</span><h2 id="hVideo">原版五個畫面 · 重點整理</h2></div>
+    <div class="vidbox">
+      <h3>出處</h3>
+      <p>參考影片：<a href="https://youtu.be/sT7KrcevK7g?si=K7BdRpoyuJDx6j78" target="_blank" rel="noopener" style="color:var(--cyan)">YouTube — Sun Tracking Smart Clock</a>（6:05–12:06 段落；示範日為 7 月 31 日星期三，美國 Illinois 州 Carbondale 一帶緯度）。以下數字係影片當日當地嘅示範值，本頁會按你揀嘅地點同日期即時重算。</p>
+      <ol>
+        <li><b>1 · Main（6:27）</b>—— 頂欄日期＋即時鐘；全日高度曲線（橙）橫跨 00–24 時軸，地平線 0° 粗白線、−6° 民用暮光淺色線；正中最大字係「下一個太陽事件」倒數（例：solar noon，in 04 hours 19 minutes @ 13:04）。定位：一眼睇晒成日嘅進度條。</li>
+        <li><b>2 · Details（7:46）</b>—— 同一曲線加現時高度（例：now 30.90°）同五條事件虛線（first light／sunrise／solar noon／sunset／last light）；一日分三段（例：夜 5 小時 32 分鐘／光段／夜 3 小時 23 分鐘，民用暮光每端 29 分鐘）；大百分比：光段已過 21.50%（全段 15 小時 4 分鐘）、全日已過 36.53%；附五個時刻實數（05:32／06:01／13:04／20:07／20:36）。</li>
+        <li><b>3 · Twilight（9:19）</b>—— 三種暮光齊全：早上天文 04:17／航海 04:56／民用 05:32／日出 06:01；黃昏日落 20:07／民用 20:36／航海 21:12／天文 21:50。累積跨度：日出→日落 14 小時 6 分鐘、民用 15 小時 4 分鐘、航海 16 小時 15 分鐘、天文 17 小時 32 分鐘；暮光總長 3 小時 26 分鐘（晨昏各 1:43）。影片特別批評一般網站只畀 −6°／−12°／−18° 數字、唔解釋用途 —— 本頁 Screen 3 已補上解釋。</li>
+        <li><b>4 · Altitude（10:26）</b>—— 側面觀察者示意圖：人物、指向太陽嘅直線視線、虛線太陽弧連小時／角度標籤；右側大數字：今日最高 71°（正午 13:04）、最低 −35°（午夜 01:04）、現時 31.50°；並列全年正午高度極值（最高 76°／最低 28°）。</li>
+        <li><b>Screen 5 · Alt/Az → Azimuth（11:07）</b>—— 俯視羅盤（北在上、方位角順時針量），外圍 0–23 小時環，太陽標喺現時方位，連線指向日出／日落點；側欄：SUNRISE 66° @ 06:01、SUNSET 294° @ 20:07、現時方位大字 91°、底部正午時間；外圍灰字標各角度到達時間，白點標全年日出／日落方位極值。</li>
+      </ol>
+      <p><b>改良建議（已全部實作喺本頁）：</b>① 新增 Screen 6 天空穹頂合併 Alt+Az（影片 12:02 講者自己講嘅下一步）；② 日期選擇＋時間軸 scrub＋播放＋回到現在；③ GPS／城市預設／手動經緯度，全部即時重算；④ 黃金時刻／藍調時刻卡、太陽時 vs 時鐘時間＋均時差、日長按日變化與至日對照、太陽距離；⑤ 全年迷你圖（日長＋正午高度，標至點／分點）；⑥ 自動輪播模式＋底部六畫面導航；⑦ 背景漸變跟隨現時太陽高度（夜／暮光／黃金／白天四態）；⑧ 單頁 PWA-ready，日後可同你其他 App 一樣包成 Android APK，離線全功能。</p>
+    </div>
+    <div class="vidbox" id="hkoBox">
+      <h3 id="hkoTitle">香港天文台參考</h3>
+      <p style="margin:4px 0"><a id="hkoL1" href="https://www.hko.gov.hk/tc/gts/astronomy/Sun_Transit.htm" target="_blank" rel="noopener" style="color:var(--cyan)">太陽中天時刻（日正午）</a></p>
+      <p style="margin:4px 0"><a id="hkoL2" href="https://www.hko.gov.hk/tc/gts/astronomy/sun_ra_dec.htm" target="_blank" rel="noopener" style="color:var(--cyan)">太陽視赤經與視赤緯</a></p>
+      <p style="margin:4px 0"><a id="hkoL3" href="https://www.hko.gov.hk/tc/gts/time/worldtime2.htm" target="_blank" rel="noopener" style="color:var(--cyan)">世界時間</a></p>
+      <p style="margin:4px 0"><a id="hkoL4" href="https://www.hko.gov.hk/en/wxinfo/worldwx/wwi.htm" target="_blank" rel="noopener" style="color:var(--cyan)">世界天氣資訊</a></p>
+      <p style="margin:4px 0"><a id="hkoL5" href="https://www.hko.gov.hk/tc/gts/time/24solarterms.htm" target="_blank" rel="noopener" style="color:var(--cyan)">二十四節氣</a></p>
+      <p style="margin:4px 0"><a id="hkoL6" href="https://www.hko.gov.hk/tc/gts/astronomy/Solar_Term.htm" target="_blank" rel="noopener" style="color:var(--cyan)">二十四節氣的日期及時間</a></p>
+    </div>
+    </div>
+  </section>
+
+  <section style="margin-top:6px">
+    <p style="margin:0"><button type="button" class="reflink" id="btnMethod" aria-expanded="false" aria-controls="methodBody">▸ 計算方法與準確度</button></p>
+    <div id="methodBody" hidden>
+    <div class="vidbox">
+      <p id="methodText" style="margin:0">本頁使用 SunCalc 同源嘅 NOAA 太陽位置算法：由日期時間計儒略日、太陽平黃經／平近點角、黃道經度、地軸傾角，得出赤緯同赤經，再以恆星時同緯度計高度角／方位角；日出日落等時刻以太陽時角方程逐事件求解（民用 −6°、航海 −12°、天文 −18°、黃金時刻 −4°／+6° 等高度角）。一般情況下時刻準確度約 ±1–2 分鐘內，高緯度接近極晝／極夜時部分事件唔存在，會顯示「—」同註明極晝／極夜。太陽距離以橢圓軌道近似計（近日點約 1.471 億 km、遠日點約 1.521 億 km）。均時差以常用近似式計，誤差約數十秒級。</p>
+    </div>
+    </div>
+  </section>
+  <footer class="verfoot" id="verFoot">Sun Tracking Clock V1.0</footer>
+</div>
+
+<!-- PDF annual report preview overlay -->
+<div id="pdfOverlay" hidden>
+  <div style="max-width:920px;margin:0 auto">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <button class="btn primary" id="btnPdfSave" type="button">💾 儲存 PDF</button>
+      <button class="btn" id="btnPdfClose" type="button">關閉預覽</button>
+      <span class="hint" id="pdfStatus" style="color:#cdd8f2"></span>
+      <span id="pdfLinkWrap"></span>
+    </div>
+    <div id="pdfStale" hidden style="background:#5a2d12;color:#ffd9a8;border:1px solid #b96a12;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13.5px;line-height:1.5"></div>
+    <div id="pdfReport"></div>
+  </div>
+</div>
+
+<!-- CSV data file preview overlay -->
+<div id="csvOverlay" hidden>
+  <div style="max-width:1060px;margin:0 auto">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <button class="btn primary" id="btnCsvDownload" type="button">⬇ 下載 CSV Download CSV</button>
+      <button class="btn" id="btnCsvClose" type="button">關閉預覽</button>
+      <span class="hint" id="csvPreviewStatus" style="color:#cdd8f2" role="status"></span>
+      <span id="csvPreviewLinkWrap"></span>
+    </div>
+    <div id="csvStale" hidden style="background:#5a2d12;color:#ffd9a8;border:1px solid #b96a12;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13.5px;line-height:1.5"></div>
+    <div class="csvPanel">
+      <h1 id="csvPreviewTitle">資料檔預覽 CSV Preview</h1>
+      <p class="meta" id="csvPreviewMeta"></p>
+      <p class="meta" id="csvPreviewNote"></p>
+      <div class="csvViewTabs" role="group" aria-label="CSV preview view">
+        <button class="btn small primary" id="btnCsvViewTable" type="button">表格 Table</button>
+        <button class="btn small" id="btnCsvViewRaw" type="button">原始文字 Raw</button>
+      </div>
+      <div class="csvTableWrap" id="csvTableWrap"><table id="csvTable"></table></div>
+      <pre class="csvRaw" id="csvRaw" hidden></pre>
+    </div>
+  </div>
+</div>
+
+<!-- bottom tab nav -->
+<nav class="tabs" aria-label="畫面切換">
+  <div class="in">
+    <button type="button" data-scr="1" class="on"><span class="ic">☀️</span>總覽</button>
+    <button type="button" data-scr="2"><span class="ic">📈</span>日照詳情</button>
+    <button type="button" data-scr="3"><span class="ic">🌆</span>暮光</button>
+    <button type="button" data-scr="4"><span class="ic">📐</span>高度角</button>
+    <button type="button" data-scr="5"><span class="ic">🧭</span>方位角</button>
+    <button type="button" data-scr="6"><span class="ic">🔮</span>穹頂</button>
+  </div>
+</nav>
+
+<script>
+"use strict";
+/* ============ SunCalc-style solar math (NOAA) ============ */
+var PI=Math.PI, rad=PI/180, deg=180/PI, dayMs=864e5, J1970=2440588, J2000=2451545, e=rad*23.4397;
+function toJulian(d){return d.valueOf()/dayMs-0.5+J1970}
+function fromJulian(j){return new Date((j+0.5-J1970)*dayMs)}
+function toDays(d){return toJulian(d)-J2000}
+function solarMeanAnomaly(d){return rad*(357.5291+0.98560028*d)}
+function eclipticLongitude(M){var C=rad*(1.9148*Math.sin(M)+0.02*Math.sin(2*M)+0.0003*Math.sin(3*M));return M+C+rad*102.9372+PI}
+function sunCoords(d){var M=solarMeanAnomaly(d),L=eclipticLongitude(M);return{dec:Math.asin(Math.sin(0)*Math.cos(e)+Math.cos(0)*Math.sin(e)*Math.sin(L)),ra:Math.atan2(Math.sin(L)*Math.cos(e)-Math.tan(0)*Math.sin(e),Math.cos(L))}}
+function siderealTime(d,lw){return rad*(280.16+360.9856235*d)-lw}
+function azimuthFn(H,phi,dec){return Math.atan2(Math.sin(H),Math.cos(H)*Math.sin(phi)-Math.tan(dec)*Math.cos(phi))}
+function altitudeFn(H,phi,dec){return Math.asin(Math.sin(phi)*Math.sin(dec)+Math.cos(phi)*Math.cos(dec)*Math.cos(H))}
+function getPosition(date,lat,lng){var lw=rad*-lng,phi=rad*lat,d=toDays(date),c=sunCoords(d),H=siderealTime(d,lw)-c.ra;
+  return{azimuth:azimuthFn(H,phi,c.dec)*deg+180, altitude:altitudeFn(H,phi,c.dec)*deg, declination:c.dec*deg, ra:(((c.ra*deg)%360)+360)%360/15};}
+var timesConfig=[[-0.833,'sunrise','sunset'],[-0.3,'sunriseEnd','sunsetStart'],[-6,'dawn','dusk'],[-12,'nauticalDawn','nauticalDusk'],[-18,'nightEnd','night'],[6,'goldenHourEnd','goldenHour']];
+var J0=0.0009;
+function julianCycle(d,lw){return Math.round(d-J0-lw/(2*PI))}
+function approxTransit(Ht,lw,n){return J0+(Ht+lw)/(2*PI)+n}
+function solarTransitJ(ds,M,L){return J2000+ds+0.0053*Math.sin(M)-0.0069*Math.sin(2*L)}
+function hourAngle(h,phi,d){var x=(Math.sin(h)-Math.sin(phi)*Math.sin(d))/(Math.cos(phi)*Math.cos(d));if(x<-1||x>1)return null;return Math.acos(x)}
+function observerAngle(height){return -2.076*Math.sqrt(height)/60}
+function getSetJ(h,lw,phi,dec,n,M,L){var w=hourAngle(h,phi,dec);if(w===null)return null;var a=approxTransit(w,lw,n);return solarTransitJ(a,M,L)}
+function getTimes(date,lat,lng,height){height=height||0;/* normalise to local midday: callers pass local-midnight dates, and the julian-cycle rounding otherwise falls back a day for east longitudes */date=new Date(date.valueOf()+12*36e5);var lw=rad*-lng,phi=rad*lat,dh=observerAngle(height),d=toDays(date),n=julianCycle(d,lw),ds=approxTransit(0,lw,n),M=solarMeanAnomaly(ds),L=eclipticLongitude(M),dec=sunCoords(ds).dec,Jnoon=solarTransitJ(ds,M,L),res={solarNoon:fromJulian(Jnoon),nadir:fromJulian(Jnoon-0.5)};
+  for(var i=0;i<timesConfig.length;i++){var pair=timesConfig[i],h=rad*pair[0]+dh,Jset=getSetJ(h,lw,phi,dec,n,M,L);if(Jset===null){res[pair[1]]=null;res[pair[2]]=null;continue}var Jrise=Jnoon-(Jset-Jnoon);res[pair[1]]=fromJulian(Jrise);res[pair[2]]=fromJulian(Jset);}
+  /* blue hour approx: sun between -6 and -4 */
+  res.blueDawnStart=res.dawn; res.goldenMorningEnd=res.goldenHourEnd; return res;}
+function sunDistanceKm(date){var d=toDays(date),M=solarMeanAnomaly(d);var r=1.000001018*(1-0.01670862*Math.cos(M)-0.000139*Math.cos(2*M));return r*149597870.7}
+function equationOfTimeMin(date){var start=new Date(date.getFullYear(),0,0);var doy=Math.floor((date-start)/dayMs);var B=2*PI/365*(doy-81);return 9.87*Math.sin(2*B)-7.53*Math.cos(B)-1.5*Math.sin(B)}
+
+/* ============ i18n ============ */
+var I18N={
+"zh-Hant":{
+ worldLabel:"世界城市",pickPlace:"— 請選擇 —",refToggle:"參考資料：原版五個畫面 · 重點整理（影片總結）",s4Below:"太陽而家喺地平線以下",lat:"緯度",lon:"經度",gps:"⌖ 用 GPS 定位",apply:"套用座標",date:"日期",scrub:"時間",play:"▶ 播放",pause:"⏸ 暫停",nowBtn:"回到現在",noonJump:"日正午",quickLabel:"快捷：",autoCycle:"自動輪播畫面（每 7 秒切換）",ctrlTitle:"📍 地點 · 🕐 時間旅行",ctrlHint:"所有太陽數據喺你部裝置即時用 NOAA / SunCalc 太陽位置算法計算，唔使連線、唔經伺服器。拖動時間或改日期，六個畫面會同步更新。天氣卡係唯一需要網絡嘅部分，資料來自 Open-Meteo（失敗時自動轉用 wttr.in 後備來源，卡上會註明實際來源），並跟隨目前所選地點。",
+ hScr1:"太陽總覽",hScr2:"日照詳情",hScr3:"暮光",hScr4:"高度角",hScr5:"方位角",hScr6:"3D 天空穹頂",hExtras:"攝影時段 · 太陽時 · 全年",hVideo:"原版五個畫面 · 重點整理",
+ tabs:["總覽","日照詳情","暮光","高度角","方位角","穹頂"],
+ dow:["星期日","星期一","星期二","星期三","星期四","星期五","星期六"],dowEn:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],mon:["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"],monEn:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+ phaseDay:"☀️ 白天",phaseGolden:"🌅 黃金時刻",phaseCivil:"🌆 民用暮光",phaseNautical:"🌌 航海暮光",phaseAstro:"🔭 天文暮光",phaseNight:"🌙 夜晚",altWord:"高度",
+ nextEvent:"下一個事件",hours:"小時",minutes:"分鐘",seconds:"秒",tomorrow:"明天 ",prevEvent:"上一個事件：",prevNote:" —— 呢段時間係今日嘅進度條。",
+ statAlt:"現時高度",statAz:"方位",sunriseSunset:"日出 → 日落",dayLength:"日長",solarNoon:"日正午",maxWord:"最高",distance:"太陽距離",about:"約",
+ polarNote:"今日部分太陽事件不存在（高緯度／極晝極夜邊緣）",polarNone:"今日沒有日出／日落（極晝／極夜）",
+ nowElev:"現時高度",nowAz:"現時方位",decl:"赤緯",mkDawn:"首光",mkSunrise:"日出",mkNoon:"日正午",mkSunset:"日落",mkDusk:"尾光",noteW:"提示",altAbbr:"高度",azAbbr:"方位",zen:"天頂",east:"東",west:"西",obs:"觀察者",domeJun:"夏至路徑（外）",ySum:"夏至",yWin:"冬至",ySpr:"春分",yAut:"秋分",
+ segNight:"夜",segLight:"光段",segTwi:"暮光每端約",segTxtA:"首光",segTxtB:"影片示範日三段為 5 小時 32 分鐘 ／ 光段 ／ 3 小時 23 分鐘 —— 你呢度嘅數字按所選地點即時重算。",
+ pctLight:"光段已過 · 全段",pctLightSuffix:"（首光→尾光）",pctDay:"全日 24 小時已過 · 現時",
+ twiAstro:"天文（−18°）",twiNaut:"航海（−12°）",twiCivil:"民用（−6°）",twiSR:"日出／日落（0°）",twiTotal:"暮光總長",twiMorning:"早上",twiEvening:"黃昏",twiNightLen:"真正全黑嘅天文夜長",twiVideo:"影片示範：暮光總長 3 小時 26 分鐘（晨昏各 1:43）。",
+ spanSR:"日出 → 日落",spanCivil:"民用（首光 → 尾光）",spanNaut:"航海",spanAstro:"天文",
+ s4Max:"今日最高",s4Min:"今日最低",s4Now:"現時",s4YearMax:"全年正午最高",s4YearMin:"全年正午最低",summer:"夏至",winter:"冬至",atNoon:"@ 日正午",atMid:"@ 日午夜",
+ s5Rise:"日出",s5Set:"日落",s5Now:"現時方位",s5Noon:"日正午",azWord:"方位",
+ s6Alt:"現時高度",s6Az:"現時方位",s6Peak:"今日路徑最高點",s6How:"點讀法",s6HowV:"圓心 = 頭頂",s6HowS:"半徑 = 離天頂幾遠 · 角度 = 方向",domeHint:"🖱️ 拖動旋轉 3D 視角 · 雙擊重設角度",domeBelow:"🌙 太陽現處於地平線以下 {v}°（穹頂外）",dome2dBelow:"太陽喺地平線以下 {v}°（穹頂外）",azNowLabel:"現時方位",compassNoon:"日正午",compassExtreme:"白點 = 全年日出／日落方位極值",
+ exGolden:"🌇 黃金時刻",exBlue:"🌌 藍調時刻",exBlueNote:"黃昏",exSolar:"🕐 太陽時",exClock:"時鐘",exGap:"差距",exMin:"分鐘",exEoT:"📏 均時差",exLonCorr:"經度修正",exChange:"📆 日長變化 · 對比昨日",exToday:"今日",exVs:"☀️ 日長 · 對比至日",
+ wxTitle:"🌦️ 天氣 · 跟隨目前地點",wxLoading:"正在取得天氣…",wxUnavailable:"未能取得天氣 — 可能離線或服務暫時不可用。太陽計算不受影響，仍可離線使用。",wxTemp:"現時氣溫",wxRange:"今日最低／最高",wxHum:"濕度",wxUV:"紫外線指數",wxUVMax:"今日最高",wxWind:"風速",wxSource:"資料來源：Open-Meteo",wxSrcPre:"資料來源：",wxTZ:"當地時區",wxDataTime:"資料時間",hko:"香港天文台即時天氣 →",
+ uvLow:"低",uvMod:"中等",uvHigh:"高",uvVHigh:"甚高",uvExtreme:"極高",
+ ev_nightEnd:"天文首光",ev_nauticalDawn:"航海首光",ev_dawn:"首光（民用）",ev_sunrise:"日出",ev_goldenHourEnd:"黃金時刻結束",ev_solarNoon:"日正午",ev_goldenHour:"黃金時刻開始",ev_sunset:"日落",ev_dusk:"尾光（民用）",ev_nauticalDusk:"航海暮光終",ev_night:"天文暮光終",ev_nadir:"日午夜",
+ placeCustom:"自訂地點",placeGPS:"GPS 目前位置",gpsLocating:"定位中…",gpsFail:"定位失敗 — 請允許定位權限",gpsTimeout:"定位逾時 — 請重試",gpsUnavailable:"未能取得位置 — 請重試",gpsUnsupported:"此裝置不支援 GPS",version:"Sun Tracking Clock V1.0",
+ tzInfoA:"顯示時區 UTC",tzInfoB:"（跟隨所選地點）· 裝置時區",
+ desc:["原版嘅核心概念：一眼睇晒成日 —— 太陽行到邊、下一個太陽事件幾時到。粗白線係地平線（0°），下面淺色線係 −6° 民用暮光界；兩線之間係暮光帶，之上係白天，−6° 之下係黑夜。","同一條高度曲線，加上五個關鍵時刻嘅垂直虛線，並將一日切成三段：首光之前嘅夜晚、首光至尾光嘅「光段」、尾光之後嘅夜晚。兩個大百分比係原版最聰明嘅設計 —— 唔使計時間，一眼知今日過咗幾多。","太陽落到地平線以下之後，天空唔會即刻全黑 —— 會逐級經過三種暮光。原版影片特別提到：一般網站只畀角度數字，唔解釋點解要分三種。呢頁補返「點解重要」。","側面視角：企喺地面嘅觀察者，視線直指太陽；虛線弧係太陽今日橫過天空嘅路徑，弧上標住小時／角度。高度角即係「太陽離地平線有幾高」—— 0° 喺地平線、90° 喺正頭頂（天頂）。","俯視羅盤：北喺正上，方位角由正北起順時針量度（東 90°、南 180°、西 270°）。外圍灰字係太陽到達各角度嘅時間；外圈白點係全年日出／日落方位嘅極值（夏至／冬至）。","立體 3D 天空穹頂：直接拖動旋轉視角，同時睇清太陽高度角、方位角、全日立體軌跡同地面影子方向。橙線係今日路徑，灰線係夏至／冬至路徑作對照。冇網絡載入唔到 3D 函式庫嗰陣，會自動退返 2D 穹頂圖。"],
+ compass:["北","東北","東","東南","南","西南","西","西北"],
+ cond:{0:"晴朗",1:"大致晴朗",2:"部分多雲",3:"多雲",45:"霧",48:"霧凇",51:"毛毛雨",53:"毛毛雨",55:"毛毛雨",56:"凍毛毛雨",57:"凍毛毛雨",61:"細雨",63:"雨",65:"大雨",66:"凍雨",67:"凍雨",71:"落雪",73:"落雪",75:"大雪",77:"雪粒",80:"驟雨",81:"驟雨",82:"暴雨驟雨",85:"雪驟雨",86:"雪驟雨",95:"雷暴",96:"雷暴連冰雹",99:"雷暴連冰雹"}
+},
+"zh-Hans":{
+ worldLabel:"世界城市",pickPlace:"— 请选择 —",refToggle:"参考资料：原版五个画面 · 重点整理（视频总结）",s4Below:"太阳现在在地平线以下",lat:"纬度",lon:"经度",gps:"⌖ 用 GPS 定位",apply:"应用坐标",date:"日期",scrub:"时间",play:"▶ 播放",pause:"⏸ 暂停",nowBtn:"回到现在",noonJump:"日正午",quickLabel:"快捷：",autoCycle:"自动轮播画面（每 7 秒切换）",ctrlTitle:"📍 地点 · 🕐 时间旅行",ctrlHint:"所有太阳数据在你的设备上即时以 NOAA / SunCalc 太阳位置算法计算，无需联网、不经服务器。拖动时间或改日期，六个画面会同步更新。天气卡是唯一需要网络的部分，数据来自 Open-Meteo（失败时自动转用 wttr.in 备用来源，卡上会注明实际来源），并跟随当前所选地点。",
+ hScr1:"太阳总览",hScr2:"日照详情",hScr3:"暮光",hScr4:"高度角",hScr5:"方位角",hScr6:"3D 天空穹顶",hExtras:"摄影时段 · 太阳时 · 全年",hVideo:"原版五个画面 · 重点整理",
+ tabs:["总览","日照详情","暮光","高度角","方位角","穹顶"],
+ dow:["星期日","星期一","星期二","星期三","星期四","星期五","星期六"],dowEn:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],mon:["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"],monEn:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+ phaseDay:"☀️ 白天",phaseGolden:"🌅 黄金时刻",phaseCivil:"🌆 民用暮光",phaseNautical:"🌌 航海暮光",phaseAstro:"🔭 天文暮光",phaseNight:"🌙 夜晚",altWord:"高度",
+ nextEvent:"下一个事件",hours:"小时",minutes:"分钟",seconds:"秒",tomorrow:"明天 ",prevEvent:"上一个事件：",prevNote:" —— 这段时间是今天的进度条。",
+ statAlt:"当前高度",statAz:"方位",sunriseSunset:"日出 → 日落",dayLength:"日长",solarNoon:"日正午",maxWord:"最高",distance:"太阳距离",about:"约",
+ polarNote:"今天部分太阳事件不存在（高纬度／极昼极夜边缘）",polarNone:"今天没有日出／日落（极昼／极夜）",
+ nowElev:"当前高度",nowAz:"当前方位",decl:"赤纬",mkDawn:"首光",mkSunrise:"日出",mkNoon:"日正午",mkSunset:"日落",mkDusk:"尾光",noteW:"提示",altAbbr:"高度",azAbbr:"方位",zen:"天顶",east:"东",west:"西",obs:"观察者",domeJun:"夏至路径（外）",ySum:"夏至",yWin:"冬至",ySpr:"春分",yAut:"秋分",
+ segNight:"夜",segLight:"光段",segTwi:"暮光每端约",segTxtA:"首光",segTxtB:"视频示范日三段为 5 小时 32 分钟 ／ 光段 ／ 3 小时 23 分钟 —— 这里的数字按所选地点即时重算。",
+ pctLight:"光段已过 · 全段",pctLightSuffix:"（首光→尾光）",pctDay:"全日 24 小时已过 · 当前",
+ twiAstro:"天文（−18°）",twiNaut:"航海（−12°）",twiCivil:"民用（−6°）",twiSR:"日出／日落（0°）",twiTotal:"暮光总长",twiMorning:"早上",twiEvening:"黄昏",twiNightLen:"真正全黑的天文夜长",twiVideo:"视频示范：暮光总长 3 小时 26 分钟（晨昏各 1:43）。",
+ spanSR:"日出 → 日落",spanCivil:"民用（首光 → 尾光）",spanNaut:"航海",spanAstro:"天文",
+ s4Max:"今日最高",s4Min:"今日最低",s4Now:"当前",s4YearMax:"全年正午最高",s4YearMin:"全年正午最低",summer:"夏至",winter:"冬至",atNoon:"@ 日正午",atMid:"@ 日午夜",
+ s5Rise:"日出",s5Set:"日落",s5Now:"当前方位",s5Noon:"日正午",azWord:"方位",
+ s6Alt:"当前高度",s6Az:"当前方位",s6Peak:"今日路径最高点",s6How:"读图法",s6HowV:"圆心 = 头顶",s6HowS:"半径 = 离天顶多远 · 角度 = 方向",domeHint:"🖱️ 拖动旋转 3D 视角 · 双击重设角度",domeBelow:"🌙 太阳现处于地平线以下 {v}°（穹顶外）",dome2dBelow:"太阳在地平线以下 {v}°（穹顶外）",azNowLabel:"当前方位",compassNoon:"日正午",compassExtreme:"白点 = 全年日出／日落方位极值",
+ exGolden:"🌇 黄金时刻",exBlue:"🌌 蓝调时刻",exBlueNote:"黄昏",exSolar:"🕐 太阳时",exClock:"时钟",exGap:"差距",exMin:"分钟",exEoT:"📏 均时差",exLonCorr:"经度修正",exChange:"📆 日长变化 · 对比昨日",exToday:"今日",exVs:"☀️ 日长 · 对比至日",
+ wxTitle:"🌦️ 天气 · 跟随当前地点",wxLoading:"正在获取天气…",wxUnavailable:"未能取得天气 — 可能离线或服务暂时不可用。太阳计算不受影响，仍可离线使用。",wxTemp:"当前气温",wxRange:"今日最低／最高",wxHum:"湿度",wxUV:"紫外线指数",wxUVMax:"今日最高",wxWind:"风速",wxSource:"数据来源：Open-Meteo",wxSrcPre:"数据来源：",wxTZ:"当地时区",wxDataTime:"数据时间",hko:"香港天文台实时天气 →",
+ uvLow:"低",uvMod:"中等",uvHigh:"高",uvVHigh:"甚高",uvExtreme:"极高",
+ ev_nightEnd:"天文首光",ev_nauticalDawn:"航海首光",ev_dawn:"首光（民用）",ev_sunrise:"日出",ev_goldenHourEnd:"黄金时刻结束",ev_solarNoon:"日正午",ev_goldenHour:"黄金时刻开始",ev_sunset:"日落",ev_dusk:"尾光（民用）",ev_nauticalDusk:"航海暮光终",ev_night:"天文暮光终",ev_nadir:"日午夜",
+ placeCustom:"自定义地点",placeGPS:"GPS 当前位置",gpsLocating:"定位中…",gpsFail:"定位失败 — 请允许定位权限",gpsTimeout:"定位超时 — 请重试",gpsUnavailable:"未能取得位置 — 请重试",gpsUnsupported:"此设备不支持 GPS",version:"Sun Tracking Clock V1.0",
+ tzInfoA:"显示时区 UTC",tzInfoB:"（跟随所选地点）· 设备时区",
+ desc:["原版的核心概念：一眼看完一整天 —— 太阳走到哪里、下一个太阳事件何时到。粗白线是地平线（0°），下面淡线是 −6° 民用暮光界；两线之间是暮光带，之上是白天，−6° 之下是黑夜。","同一条高度曲线，加上五个关键时刻的垂直虚线，并将一天切成三段：首光之前的夜晚、首光至尾光的「光段」、尾光之后的夜晚。两个大百分比是原版最聪明的设计 —— 不用算时间，一眼知道今天过了多少。","太阳落到地平线以下之后，天空不会立刻全黑 —— 会逐级经过三种暮光。原版视频特别提到：一般网站只给角度数字，不解释为何要分三种。这一页补上「为何重要」。","侧面视角：站在地面的观察者，视线直指太阳；虚线弧是太阳今天横过天空的路径，弧上标有小时／角度。高度角就是「太阳离地平线有多高」—— 0° 在地平线、90° 在正头顶（天顶）。","俯视罗盘：北在正上，方位角由正北起顺时针量度（东 90°、南 180°、西 270°）。外围灰字是太阳到达各角度的时间；外圈白点是全年日出／日落方位的极值（夏至／冬至）。","立体 3D 天空穹顶：直接拖动旋转视角，同时看清太阳高度角、方位角、全日立体轨迹与地面影子方向。橙线是今日路径，灰线是夏至／冬至路径作对照。无网络加载不到 3D 库时，会自动退回 2D 穹顶图。"],
+ compass:["北","东北","东","东南","南","西南","西","西北"],
+ cond:{0:"晴朗",1:"大致晴朗",2:"部分多云",3:"多云",45:"雾",48:"雾凇",51:"毛毛雨",53:"毛毛雨",55:"毛毛雨",56:"冻毛毛雨",57:"冻毛毛雨",61:"小雨",63:"雨",65:"大雨",66:"冻雨",67:"冻雨",71:"下雪",73:"下雪",75:"大雪",77:"雪粒",80:"阵雨",81:"阵雨",82:"暴雨阵雨",85:"雪阵雨",86:"雪阵雨",95:"雷暴",96:"雷暴伴冰雹",99:"雷暴伴冰雹"}
+},
+"en":{
+ worldLabel:"World Cities",pickPlace:"— Select —",refToggle:"Reference: the original five screens · summary (video notes)",s4Below:"The sun is currently below the horizon",lat:"Latitude",lon:"Longitude",gps:"⌖ Use GPS",apply:"Apply coordinates",date:"Date",scrub:"Time scrub",play:"▶ Play",pause:"⏸ Pause",nowBtn:"Back to now",noonJump:"Solar Noon",quickLabel:"Quick jump:",autoCycle:"Auto-cycle screens (every 7 seconds)",ctrlTitle:"📍 Location · 🕐 Time Travel",ctrlHint:"All solar data is calculated on your device with the NOAA / SunCalc solar-position algorithm — no connection or server needed. Drag the time or change the date and all six screens update together. The weather card is the only part that needs a network; its data comes from Open-Meteo (automatically falling back to wttr.in if that fails — the card names the source actually used) and follows the currently selected location.",
+ hScr1:"Solar Overview",hScr2:"Daylight Details",hScr3:"Twilight",hScr4:"Altitude",hScr5:"Azimuth",hScr6:"3D Sky Dome",hExtras:"Photo Windows · Solar Time · Year",hVideo:"The Original Five Screens · Summary",
+ tabs:["Overview","Daylight Details","Twilight","Altitude","Azimuth","Dome"],
+ dow:["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],dowEn:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],mon:["January","February","March","April","May","June","July","August","September","October","November","December"],monEn:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+ phaseDay:"☀️ Day",phaseGolden:"🌅 Golden hour",phaseCivil:"🌆 Civil twilight",phaseNautical:"🌌 Nautical twilight",phaseAstro:"🔭 Astronomical twilight",phaseNight:"🌙 Night",altWord:"Altitude",
+ nextEvent:"Next event",hours:"hours",minutes:"minutes",seconds:"sec",tomorrow:"tomorrow ",prevEvent:"Previous event: ",prevNote:" — this stretch is today's progress bar.",
+ statAlt:"Altitude now",statAz:"Azimuth",sunriseSunset:"Sunrise → Sunset",dayLength:"Day length",solarNoon:"Solar noon",maxWord:"Max",distance:"Sun distance",about:"about",
+ polarNote:"Some solar events do not occur today (high latitude / polar day-night edge)",polarNone:"No sunrise or sunset today (polar day / polar night)",
+ nowElev:"Altitude now",nowAz:"Azimuth now",decl:"Declination",mkDawn:"first light",mkSunrise:"sunrise",mkNoon:"solar noon",mkSunset:"sunset",mkDusk:"last light",noteW:"Note",altAbbr:"Alt",azAbbr:"Az",zen:"Zenith",east:"East",west:"West",obs:"Observer",domeJun:"Summer-solstice path (outer)",ySum:"Summer solstice",yWin:"Winter solstice",ySpr:"Spring equinox",yAut:"Autumn equinox",
+ segNight:"Night",segLight:"Light span",segTwi:"twilight each end approx.",segTxtA:"First light",segTxtB:"The video's example day split into 5hr 32min / light span / 3hr 23min — your figures are recalculated live for the selected location.",
+ pctLight:"of the light span elapsed · full span",pctLightSuffix:"(first light → last light)",pctDay:"of the full 24 hours elapsed · now",
+ twiAstro:"Astronomical (−18°)",twiNaut:"Nautical (−12°)",twiCivil:"Civil (−6°)",twiSR:"Sunrise / Sunset (0°)",twiTotal:"Total twilight",twiMorning:"morning",twiEvening:"evening",twiNightLen:"True astronomical night length",twiVideo:"Video example: total twilight 3hr 26min (1:43 each end).",
+ spanSR:"Sunrise → Sunset",spanCivil:"Civil (first → last light)",spanNaut:"Nautical",spanAstro:"Astronomical",
+ s4Max:"Max today",s4Min:"Min today",s4Now:"Now",s4YearMax:"Year's highest noon",s4YearMin:"Year's lowest noon",summer:"Summer solstice",winter:"Winter solstice",atNoon:"@ solar noon",atMid:"@ solar midnight",
+ s5Rise:"SUNRISE",s5Set:"SUNSET",s5Now:"Azimuth now",s5Noon:"Solar noon",azWord:"Azimuth",
+ s6Alt:"Altitude now",s6Az:"Azimuth now",s6Peak:"Highest point today",s6How:"How to read",s6HowV:"Centre = overhead",s6HowS:"Radius = distance from zenith · angle = direction",domeHint:"🖱️ Drag to rotate · Double-click to reset view",domeBelow:"🌙 Sun is {v}° below the horizon (outside the dome)",dome2dBelow:"Sun is {v}° below the horizon (outside the dome)",azNowLabel:"Azimuth now",compassNoon:"Solar noon",compassExtreme:"White dots = year's extreme sunrise / sunset bearings",
+ exGolden:"🌇 Golden hour",exBlue:"🌌 Blue hour",exBlueNote:"Evening",exSolar:"🕐 Solar time",exClock:"Clock",exGap:"offset",exMin:"min",exEoT:"📏 Equation of time",exLonCorr:"Longitude correction",exChange:"📆 Day-length change vs yesterday",exToday:"Today",exVs:"☀️ Day length vs solstices",
+ wxTitle:"🌦️ Weather · follows current location",wxLoading:"Fetching weather…",wxUnavailable:"Weather unavailable — you may be offline or the service is temporarily unreachable. Solar calculations are unaffected and still work offline.",wxTemp:"Temperature now",wxRange:"Today's low / high",wxHum:"Humidity",wxUV:"UV index",wxUVMax:"Today's max",wxWind:"Wind speed",wxSource:"Source: Open-Meteo",wxSrcPre:"Source: ",wxTZ:"Local timezone",wxDataTime:"Data time",hko:"Hong Kong Observatory (HKO) live weather →",
+ uvLow:"Low",uvMod:"Moderate",uvHigh:"High",uvVHigh:"Very High",uvExtreme:"Extreme",
+ ev_nightEnd:"Astronomical dawn",ev_nauticalDawn:"Nautical dawn",ev_dawn:"First light (civil)",ev_sunrise:"Sunrise",ev_goldenHourEnd:"Golden hour end",ev_solarNoon:"Solar noon",ev_goldenHour:"Golden hour start",ev_sunset:"Sunset",ev_dusk:"Last light (civil)",ev_nauticalDusk:"Nautical dusk",ev_night:"Astronomical dusk",ev_nadir:"Solar midnight",
+ placeCustom:"Custom location",placeGPS:"GPS current location",gpsLocating:"Locating…",gpsFail:"Location failed — please allow location permission",gpsTimeout:"Location timed out — please retry",gpsUnavailable:"Position unavailable — please retry",gpsUnsupported:"GPS not supported on this device",version:"Sun Tracking Clock V1.0",
+ tzInfoA:"Display timezone UTC",tzInfoB:"(follows selected location) · Device timezone",
+ desc:["The original's core idea: the whole day at a glance — where the sun is and when the next solar event arrives. The bold white line is the horizon (0°); the faint line below is the −6° civil-twilight boundary. Between them is the twilight band; above is daytime, below −6° is night.","The same altitude curve with vertical markers for five key moments, and the day split into three parts: night before first light, the 'light span' from first to last light, and night after last light. The two large percentages are the original's smartest touch — no arithmetic, just how much of today has passed.","After the sun drops below the horizon the sky does not go dark at once — it steps through three twilights. The video notes that most websites only give the angle numbers and never explain why there are three. This screen adds the 'why it matters'.","A side view: an observer on the ground looking straight at the sun; the dashed arc is the sun's path across today's sky, labelled with hours and angles. Altitude is simply how high the sun is above the horizon — 0° at the horizon, 90° directly overhead (the zenith).","A top-down compass: north at the top, azimuth measured clockwise from true north (east 90°, south 180°, west 270°). Grey labels around the edge show when the sun reaches each bearing; white dots mark the year's extreme sunrise/sunset bearings (the solstices).","Interactive 3D Alt/Az sky dome: drag to orbit and read altitude, azimuth, the full 3D sun path and the ground-shadow direction at once. Orange is today; grey lines are the solstice paths for comparison. If the 3D library cannot load (offline), it falls back to the 2D dome chart."],
+ compass:["N","NE","E","SE","S","SW","W","NW"],
+ cond:{0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Depositing rime fog",51:"Light drizzle",53:"Drizzle",55:"Dense drizzle",56:"Freezing drizzle",57:"Freezing drizzle",61:"Light rain",63:"Rain",65:"Heavy rain",66:"Freezing rain",67:"Freezing rain",71:"Snow fall",73:"Snow fall",75:"Heavy snow",77:"Snow grains",80:"Rain showers",81:"Rain showers",82:"Violent rain showers",85:"Snow showers",86:"Snow showers",95:"Thunderstorm",96:"Thunderstorm with hail",99:"Thunderstorm with hail"}
+}};
+/* additions for the HKO city list / RA / UTC / PDF round — merged into the dictionaries above */
+var I18N_ADD={
+"zh-Hant":{ra:"視赤經",tzZone:"時區",tzDevice:"裝置時區",tzDiff:"（與所選地點不同）",hkoTitle:"香港天文台參考",hkoL1:"太陽中天時刻（日正午）",hkoL5:"二十四節氣",hkoL6:"二十四節氣的日期及時間",hkoL2:"太陽視赤經與視赤緯",hkoL3:"世界時間",hkoL4:"世界天氣資訊",pdfBtn:"📄 預覽及匯出 PDF",pdfHint:"全年報告：每月 15 日＋24 節氣，跟目前地點與年份",pdfTitle:"全年太陽數據報告",pdfMonthly:"每月 15 日 · 日正午數據（當地時間 24 小時制）",pdfTerms:"二十四節氣 · 全年（太陽黃經每 15° 一節氣）",termsCol:"節氣",lonCol:"太陽黃經",dateCol:"日期",timeCol:"時間",chartTitle:"圖表",chartYearCap:"全年一覽：日長（橙線）與正午高度角（藍線）",chartDayCap:"所選日子全日太陽高度曲線：橙線為高度角、黑線為地平線 0°、黃點為所選時刻",termsNote:"節氣定義依香港天文台：太陽視黃經每隔 15° 為一節氣（春分 0°、夏至 90°、秋分 180°、冬至 270°）；時刻以本頁天文算法求解黃經交點，再換算為所選地點當地時間（24 小時制）。",leg_altCurve:"太陽高度曲線",leg_horizon:"地平線 0°",leg_civil:"民用暮光界 −6°",leg_sunNow:"太陽現時位置",leg_sr0:"0° 日出／日落",leg_civ6:"−6° 民用",leg_nau12:"−12° 航海",leg_ast18:"−18° 天文",leg_todayPath:"今日太陽軌跡",leg_solPaths:"夏至／冬至軌跡",leg_sunShadow:"太陽與地面投影",leg_dayLenH:"日長（小時）",leg_noonAltD:"正午高度角（°）",leg_yearMarks:"｜ 虛線：春分 · 夏至 · 秋分 · 冬至",terms:["小寒","大寒","立春","雨水","驚蟄","春分","清明","穀雨","立夏","小滿","芒種","夏至","小暑","大暑","立秋","處暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至"],pdfColAlt:"正午高度角",pdfColLen:"日長 (h:mm)",pdfColEoT:"均時差",pdfSave:"💾 儲存 PDF",pdfClose:"關閉預覽",pdfGenerating:"正在生成 PDF…",pdfReady:"PDF 已生成。",pdfDl:"⬇ 點此下載 PDF 檔案",pdfShareOk:"已開啟分享。",pdfFail:"PDF 生成失敗 — 可能係函式庫未能載入（需要網絡），請重試。",pdfStale:"⚠ 地點／年份／語言已更改，呢份預覽已過期 — 請關閉後重新預覽。",pdfLoc:"地點",pdfFoot:"數據由本頁太陽位置算法（NOAA / SunCalc 同源）按上列地點即時計算，時間為當地 24 小時制。參考：香港天文台太陽中天 https://www.hko.gov.hk/tc/gts/astronomy/Sun_Transit.htm · 太陽視赤經與視赤緯 https://www.hko.gov.hk/tc/gts/astronomy/sun_ra_dec.htm · 世界時間 https://www.hko.gov.hk/tc/gts/time/worldtime2.htm · 二十四節氣 https://www.hko.gov.hk/tc/gts/time/24solarterms.htm · 節氣日期及時間 https://www.hko.gov.hk/tc/gts/astronomy/Solar_Term.htm"},
+"zh-Hans":{ra:"视赤经",tzZone:"时区",tzDevice:"装置时区",tzDiff:"（与所选地点不同）",hkoTitle:"香港天文台参考",hkoL1:"太阳中天时刻（日正午）",hkoL5:"二十四节气",hkoL6:"二十四节气的日期及时间",hkoL2:"太阳视赤经与视赤纬",hkoL3:"世界时间",hkoL4:"世界天气资讯",pdfBtn:"📄 预览及导出 PDF",pdfHint:"全年报告：每月 15 日＋24 节气，跟当前地点与年份",pdfTitle:"全年太阳数据报告",pdfMonthly:"每月 15 日 · 日正午数据（当地时间 24 小时制）",pdfTerms:"二十四节气 · 全年（太阳黄经每 15° 一节气）",termsCol:"节气",lonCol:"太阳黄经",dateCol:"日期",timeCol:"时间",chartTitle:"图表",chartYearCap:"全年一览：日长（橙线）与正午高度角（蓝线）",chartDayCap:"所选日子全日太阳高度曲线：橙线为高度角、黑线为地平线 0°、黄点为所选时刻",termsNote:"节气定义依香港天文台：太阳视黄经每隔 15° 为一节气（春分 0°、夏至 90°、秋分 180°、冬至 270°）；时刻以本页天文算法求解黄经交点，再换算为所选地点当地时间（24 小时制）。",leg_altCurve:"太阳高度曲线",leg_horizon:"地平线 0°",leg_civil:"民用暮光界 −6°",leg_sunNow:"太阳现时位置",leg_sr0:"0° 日出／日落",leg_civ6:"−6° 民用",leg_nau12:"−12° 航海",leg_ast18:"−18° 天文",leg_todayPath:"今日太阳轨迹",leg_solPaths:"夏至／冬至轨迹",leg_sunShadow:"太阳与地面投影",leg_dayLenH:"日长（小时）",leg_noonAltD:"正午高度角（°）",leg_yearMarks:"｜ 虚线：春分 · 夏至 · 秋分 · 冬至",terms:["小寒","大寒","立春","雨水","惊蛰","春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑","立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至"],pdfColAlt:"正午高度角",pdfColLen:"日长 (h:mm)",pdfColEoT:"均时差",pdfSave:"💾 保存 PDF",pdfClose:"关闭预览",pdfGenerating:"正在生成 PDF…",pdfReady:"PDF 已生成。",pdfDl:"⬇ 点此下载 PDF 文件",pdfShareOk:"已打开分享。",pdfFail:"PDF 生成失败 — 可能是函数库未能加载（需要网络），请重试。",pdfStale:"⚠ 地点／年份／语言已更改，这份预览已过期 — 请关闭后重新预览。",pdfLoc:"地点",pdfFoot:"数据由本页太阳位置算法（NOAA / SunCalc 同源）按上列地点即时计算，时间为当地 24 小时制。参考：香港天文台太阳中天 https://www.hko.gov.hk/tc/gts/astronomy/Sun_Transit.htm · 太阳视赤经与视赤纬 https://www.hko.gov.hk/tc/gts/astronomy/sun_ra_dec.htm · 世界时间 https://www.hko.gov.hk/tc/gts/time/worldtime2.htm · 二十四节气 https://www.hko.gov.hk/tc/gts/time/24solarterms.htm · 节气日期及时间 https://www.hko.gov.hk/tc/gts/astronomy/Solar_Term.htm"},
+"en":{ra:"Right Ascension",tzZone:"Time zone",tzDevice:"Device time zone",tzDiff:"(differs from selected place)",hkoTitle:"Hong Kong Observatory references",hkoL1:"Sun transit times (solar noon)",hkoL5:"The 24 solar terms",hkoL6:"Dates and times of the 24 solar terms",hkoL2:"The Sun's apparent RA & declination",hkoL3:"World time",hkoL4:"World Weather Information",pdfBtn:"📄 Preview & Export PDF",pdfHint:"Annual report: the 15th of each month + the 24 solar terms, for the current place and year",pdfTitle:"Annual Solar Data Report",pdfMonthly:"The 15th of each month · values at solar noon (local time, 24-hour)",pdfTerms:"The 24 solar terms · full year (one term every 15° of ecliptic longitude)",termsCol:"Solar term",lonCol:"Ecliptic longitude",dateCol:"Date",timeCol:"Time",chartTitle:"Charts",chartYearCap:"Year at a glance: day length (orange) and noon altitude (blue)",chartDayCap:"Full-day altitude curve for the selected day: orange = altitude, black = horizon 0°, yellow dot = selected moment",termsNote:"Definitions follow the Hong Kong Observatory: each solar term is the Sun reaching an apparent ecliptic longitude that is a multiple of 15° (spring equinox 0°, summer solstice 90°, autumn equinox 180°, winter solstice 270°). Instants are solved on-device from the longitude crossing and shown in the selected location local time (24-hour).",leg_altCurve:"Altitude curve",leg_horizon:"Horizon 0°",leg_civil:"Civil twilight −6°",leg_sunNow:"Sun now",leg_sr0:"0° Sunrise / Sunset",leg_civ6:"−6° Civil",leg_nau12:"−12° Nautical",leg_ast18:"−18° Astronomical",leg_todayPath:"Sun path today",leg_solPaths:"Solstice paths",leg_sunShadow:"Sun & ground shadow",leg_dayLenH:"Day length (hours)",leg_noonAltD:"Noon altitude (°)",leg_yearMarks:"| Dashed: equinoxes & solstices",terms:["Lesser Cold","Greater Cold","Spring Begins","Rain Water","Insects Awaken","Spring Equinox","Bright & Clear","Grain Rain","Summer Begins","Grain Full","Grain in Ear","Summer Solstice","Lesser Heat","Greater Heat","Autumn Begins","Heat Ends","White Dew","Autumn Equinox","Cold Dew","Frost Descent","Winter Begins","Lesser Snow","Greater Snow","Winter Solstice"],pdfColAlt:"Noon altitude",pdfColLen:"Day length (h:mm)",pdfColEoT:"Eq. of time",pdfSave:"💾 Save PDF",pdfClose:"Close preview",pdfGenerating:"Generating PDF…",pdfReady:"PDF generated.",pdfDl:"⬇ Download the PDF file",pdfShareOk:"Share sheet opened.",pdfFail:"PDF generation failed — the library may not have loaded (needs a network connection). Please retry.",pdfStale:"⚠ Location, year or language changed — this preview is out of date. Close it and preview again.",pdfLoc:"Location",pdfFoot:"Data computed on-device by this page's solar-position engine (NOAA / SunCalc family) for the location above; all times are local, 24-hour. References: HKO Sun transit https://www.hko.gov.hk/tc/gts/astronomy/Sun_Transit.htm · Sun's RA & Dec https://www.hko.gov.hk/tc/gts/astronomy/sun_ra_dec.htm · World time https://www.hko.gov.hk/tc/gts/time/worldtime2.htm · 24 solar terms https://www.hko.gov.hk/tc/gts/time/24solarterms.htm · Solar term dates & times https://www.hko.gov.hk/tc/gts/astronomy/Solar_Term.htm"}};
+for(var _L in I18N_ADD){if(I18N[_L]){for(var _k in I18N_ADD[_L])I18N[_L][_k]=I18N_ADD[_L][_k];}}
+/* additions for the merged annual table + CSV export round */
+var I18N_ADD2={
+"zh-Hant":{pdfHint:"全年報告：每月 15 日＋24 節氣合併表，跟目前地點與年份",pdfMerged:"全年合併表 · 每月 15 日＋24 節氣（按日期順序 · 當地時間 24 小時制）",colLabel:"標記",colTermTime:"節氣時刻",monthlyMark:"15日",csvBtn:"📊 匯出資料檔 CSV（Excel／Revit）",csvDone:"已匯出 {f}（共 {n} 行數據）— 可直接以 Excel 開啟；Revit 冇原生太陽數據表匯入，請喺 Revit 內以 Dynamo 讀取此 CSV。",csvDl:"⬇ 點此下載 CSV 檔案",csvFail:"CSV 匯出失敗，請重試。"},
+"zh-Hans":{pdfHint:"全年报告：每月 15 日＋24 节气合并表，跟当前地点与年份",pdfMerged:"全年合并表 · 每月 15 日＋24 节气（按日期顺序 · 当地时间 24 小时制）",colLabel:"标记",colTermTime:"节气时刻",monthlyMark:"15日",csvBtn:"📊 导出数据文件 CSV（Excel／Revit）",csvDone:"已导出 {f}（共 {n} 行数据）— 可直接以 Excel 打开；Revit 没有原生太阳数据表导入，请在 Revit 内以 Dynamo 读取此 CSV。",csvDl:"⬇ 点此下载 CSV 文件",csvFail:"CSV 导出失败，请重试。"},
+"en":{pdfHint:"Annual report: one merged table — the 15th of each month + the 24 solar terms, for the current place and year",pdfMerged:"Merged annual table · the 15th of each month + the 24 solar terms (chronological · local time, 24-hour)",colLabel:"Label",colTermTime:"Solar-term time",monthlyMark:"15th",csvBtn:"📊 Export data CSV (Excel / Revit)",csvDone:"Exported {f} ({n} data rows) — opens directly in Excel; Revit has no native sun-data table import, so read this CSV in Revit via Dynamo.",csvDl:"⬇ Download the CSV file",csvFail:"CSV export failed — please try again."}};
+for(var _L2 in I18N_ADD2){if(I18N[_L2]){for(var _k2 in I18N_ADD2[_L2])I18N[_L2][_k2]=I18N_ADD2[_L2][_k2];}}
+/* additions for the CSV preview round */
+var I18N_ADD3={
+"zh-Hant":{csvPreviewTitle:"資料檔預覽 CSV Preview",csvDownload:"⬇ 下載 CSV Download CSV",csvClose:"關閉預覽",csvViewTable:"表格 Table",csvViewRaw:"原始文字 Raw",csvMeta:"將下載檔案 File: {f} · 共 {n} 行數據 + 1 行表頭（header）· 編碼 Encoding: UTF-8 BOM",csvNote:"表格視圖與原始文字係同一個檔案嘅兩種睇法；實際下載嘅 CSV 內容同「原始文字」完全一致（檔案開頭另加 UTF-8 BOM 供 Excel 正確顯示中文）。Revit 冇原生太陽數據表匯入，請喺 Revit 內以 Dynamo 讀取此 CSV。",csvStale:"⚠ 地點／年份／語言已更改，呢份 CSV 預覽已過期 — 請關閉後重新預覽。",csvPreviewDone:"已準備下載 {f}（共 {n} 行數據）— 如未自動開始，請撳下面嘅下載連結。"},
+"zh-Hans":{csvPreviewTitle:"数据文件预览 CSV Preview",csvDownload:"⬇ 下载 CSV Download CSV",csvClose:"关闭预览",csvViewTable:"表格 Table",csvViewRaw:"原始文字 Raw",csvMeta:"将下载文件 File: {f} · 共 {n} 行数据 + 1 行表头（header）· 编码 Encoding: UTF-8 BOM",csvNote:"表格视图与原始文字是同一个文件的两种看法；实际下载的 CSV 内容与「原始文字」完全一致（文件开头另加 UTF-8 BOM 供 Excel 正确显示中文）。Revit 没有原生太阳数据表导入，请在 Revit 内以 Dynamo 读取此 CSV。",csvStale:"⚠ 地点／年份／语言已更改，这份 CSV 预览已过期 — 请关闭后重新预览。",csvPreviewDone:"已准备下载 {f}（共 {n} 行数据）— 如未自动开始，请点下面的下载链接。"},
+"en":{csvPreviewTitle:"CSV Preview — Data File Preview",csvDownload:"⬇ Download CSV",csvClose:"Close preview",csvViewTable:"Table",csvViewRaw:"Raw",csvMeta:"File to download: {f} · {n} data rows + 1 header row · Encoding: UTF-8 BOM",csvNote:"The Table and Raw views are two views of the same file; the downloaded CSV is exactly the Raw text (with a UTF-8 BOM prepended so Excel shows Chinese correctly). Revit has no native sun-data table import — read this CSV in Revit via Dynamo.",csvStale:"⚠ Location, year or language changed — this CSV preview is out of date. Close it and preview again.",csvPreviewDone:"Download ready: {f} ({n} data rows) — if it does not start automatically, use the download link below."}};
+for(var _L3 in I18N_ADD3){if(I18N[_L3]){for(var _k3 in I18N_ADD3[_L3])I18N[_L3][_k3]=I18N_ADD3[_L3][_k3];}}
+function t(k){var d=I18N[state.lang]||I18N["zh-Hant"];return d[k]!==undefined?d[k]:(I18N["zh-Hant"][k]||k)}
+function condLabel(code){var d=I18N[state.lang]||I18N["zh-Hant"];return d.cond[code]||d.cond[3]}
+function condIcon(code){if(code===0)return"☀️";if(code<=2)return"🌤️";if(code===3)return"☁️";if(code===45||code===48)return"🌫️";if(code>=51&&code<=57)return"🌦️";if((code>=61&&code<=67)||(code>=80&&code<=82))return"🌧️";if((code>=71&&code<=77)||code===85||code===86)return"❄️";if(code>=95)return"⛈️";return"🌤️"}
+function uvLevel(uv){if(uv==null||isNaN(uv))return"";if(uv<3)return t("uvLow");if(uv<6)return t("uvMod");if(uv<8)return t("uvHigh");if(uv<11)return t("uvVHigh");return t("uvExtreme")}
+function isHK(lat,lon){return lat>=22.13&&lat<=22.57&&lon>=113.82&&lon<=114.50}
+
+/* ============ State ============ */
+/* World cities modelled on the Hong Kong Observatory World Weather Information list, grouped by region in one scrollable dropdown. Offsets are resolved per-date from the IANA zone (see zoneOffsetMin); tz is only a rough fallback. */
+var CITY_GROUPS=[
+ {rHant:"亞洲 Asia",rHans:"亚洲 Asia",rEn:"Asia",cities:[
+  ["香港 Hong Kong","香港 Hong Kong","Hong Kong",22.3193,114.1694,"Asia/Hong_Kong"],
+  ["北京 Beijing","北京 Beijing","Beijing",39.9042,116.4074,"Asia/Shanghai"],
+  ["上海 Shanghai","上海 Shanghai","Shanghai",31.2304,121.4737,"Asia/Shanghai"],
+  ["台北 Taipei","台北 Taipei","Taipei",25.033,121.5654,"Asia/Taipei"],
+  ["東京 Tokyo","东京 Tokyo","Tokyo",35.6762,139.6503,"Asia/Tokyo"],
+  ["大阪 Osaka","大阪 Osaka","Osaka",34.6937,135.5023,"Asia/Tokyo"],
+  ["首爾 Seoul","首尔 Seoul","Seoul",37.5665,126.978,"Asia/Seoul"],
+  ["新加坡 Singapore","新加坡 Singapore","Singapore",1.3521,103.8198,"Asia/Singapore"],
+  ["曼谷 Bangkok","曼谷 Bangkok","Bangkok",13.7563,100.5018,"Asia/Bangkok"],
+  ["吉隆坡 Kuala Lumpur","吉隆坡 Kuala Lumpur","Kuala Lumpur",3.139,101.6869,"Asia/Kuala_Lumpur"],
+  ["雅加達 Jakarta","雅加达 Jakarta","Jakarta",-6.2088,106.8456,"Asia/Jakarta"],
+  ["馬尼拉 Manila","马尼拉 Manila","Manila",14.5995,120.9842,"Asia/Manila"],
+  ["河內 Hanoi","河内 Hanoi","Hanoi",21.0278,105.8342,"Asia/Ho_Chi_Minh"],
+  ["孟買 Mumbai","孟买 Mumbai","Mumbai",19.076,72.8777,"Asia/Kolkata"],
+  ["杜拜 Dubai","迪拜 Dubai","Dubai",25.2048,55.2708,"Asia/Dubai"]]},
+ {rHant:"歐洲 Europe",rHans:"欧洲 Europe",rEn:"Europe",cities:[
+  ["倫敦 London","伦敦 London","London",51.5074,-0.1278,"Europe/London"],
+  ["巴黎 Paris","巴黎 Paris","Paris",48.8566,2.3522,"Europe/Paris"],
+  ["柏林 Berlin","柏林 Berlin","Berlin",52.52,13.405,"Europe/Berlin"],
+  ["羅馬 Rome","罗马 Rome","Rome",41.9028,12.4964,"Europe/Rome"],
+  ["馬德里 Madrid","马德里 Madrid","Madrid",40.4168,-3.7038,"Europe/Madrid"],
+  ["阿姆斯特丹 Amsterdam","阿姆斯特丹 Amsterdam","Amsterdam",52.3676,4.9041,"Europe/Amsterdam"],
+  ["蘇黎世 Zurich","苏黎世 Zurich","Zurich",47.3769,8.5417,"Europe/Zurich"],
+  ["斯德哥爾摩 Stockholm","斯德哥尔摩 Stockholm","Stockholm",59.3293,18.0686,"Europe/Stockholm"],
+  ["莫斯科 Moscow","莫斯科 Moscow","Moscow",55.7558,37.6173,"Europe/Moscow"]]},
+ {rHant:"北美洲 North America",rHans:"北美洲 North America",rEn:"North America",cities:[
+  ["紐約 New York","纽约 New York","New York",40.7128,-74.006,"America/New_York"],
+  ["洛杉磯 Los Angeles","洛杉矶 Los Angeles","Los Angeles",34.0522,-118.2437,"America/Los_Angeles"],
+  ["芝加哥 Chicago","芝加哥 Chicago","Chicago",41.8781,-87.6298,"America/Chicago"],
+  ["三藩市 San Francisco","三藩市 San Francisco","San Francisco",37.7749,-122.4194,"America/Los_Angeles"],
+  ["多倫多 Toronto","多伦多 Toronto","Toronto",43.6532,-79.3832,"America/Toronto"],
+  ["溫哥華 Vancouver","温哥华 Vancouver","Vancouver",49.2827,-123.1207,"America/Vancouver"]]},
+ {rHant:"南美洲 South America",rHans:"南美洲 South America",rEn:"South America",cities:[
+  ["聖保羅 São Paulo","圣保罗 São Paulo","São Paulo",-23.5505,-46.6333,"America/Sao_Paulo"],
+  ["布宜諾斯艾利斯 Buenos Aires","布宜诺斯艾利斯 Buenos Aires","Buenos Aires",-34.6037,-58.3816,"America/Argentina/Buenos_Aires"],
+  ["聖地牙哥 Santiago","圣地亚哥 Santiago","Santiago",-33.4489,-70.6693,"America/Santiago"]]},
+ {rHant:"大洋洲 Oceania",rHans:"大洋洲 Oceania",rEn:"Oceania",cities:[
+  ["悉尼 Sydney","悉尼 Sydney","Sydney",-33.8688,151.2093,"Australia/Sydney"],
+  ["墨爾本 Melbourne","墨尔本 Melbourne","Melbourne",-37.8136,144.9631,"Australia/Melbourne"],
+  ["奧克蘭 Auckland","奥克兰 Auckland","Auckland",-36.8485,174.7633,"Pacific/Auckland"]]},
+ {rHant:"非洲 Africa",rHans:"非洲 Africa",rEn:"Africa",cities:[
+  ["開羅 Cairo","开罗 Cairo","Cairo",30.0444,31.2357,"Africa/Cairo"],
+  ["約翰內斯堡 Johannesburg","约翰内斯堡 Johannesburg","Johannesburg",-26.2041,28.0473,"Africa/Johannesburg"],
+  ["奈羅比 Nairobi","内罗毕 Nairobi","Nairobi",-1.2921,36.8219,"Africa/Nairobi"]]}];
+var PRESETS=[];
+CITY_GROUPS.forEach(function(g){g.cities.forEach(function(c){PRESETS.push({nHant:c[0],nHans:c[1],nEn:c[2],lat:c[3],lon:c[4],tz:Math.round(c[4]/15)*60,zone:c[5]});});});
+function placeName(p){return state.lang==="en"?p.nEn:(state.lang==="zh-Hans"?p.nHans:p.nHant)}
+var state={lang:"zh-Hant",wx:null,wxErr:false,wxSrc:null,lat:22.3193,lon:114.1694,tz:480,zone:"Asia/Hong_Kong",place:"香港 Hong Kong",placeKind:"world",live:true,date:new Date(),playing:false,playTimer:null,cycle:false,cycleTimer:null,scr:1};
+var $=function(id){return document.getElementById(id)};
+
+/* timezone-aware formatting: every instant is shifted by the UTC offset in force AT THAT INSTANT (offsetAt), never by one global offset — a single state.tz is only correct for the currently displayed date, and dated readouts (annual PDF rows, solstice/equinox days, yesterday/tomorrow events) fall in other DST regimes. */
+function shifted(d){return new Date(d.getTime()+offsetAt(d)*60000)}
+/* Real IANA-zone UTC offset (DST-aware) for a given instant. Preset cities carry a zone, so Sydney / London / New York follow daylight saving per date instead of fixed standard-time offsets. state.tz mirrors the offset at the displayed instant only (for the header readout); every formatting/day-boundary path resolves the offset per target instant via offsetAt. tz stays as the fallback if the zone lookup is unavailable. */
+var _dtfCache={};
+function zoneOffsetMin(zone,date){try{var dtf=_dtfCache[zone];if(!dtf){dtf=new Intl.DateTimeFormat("en-US",{timeZone:zone,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"});_dtfCache[zone]=dtf;}var parts={},arr=dtf.formatToParts(date);for(var i=0;i<arr.length;i++){if(arr[i].type!=="literal")parts[arr[i].type]=arr[i].value;}var asUTC=Date.UTC(+parts.year,+parts.month-1,+parts.day,(+parts.hour)%24,+parts.minute,+parts.second);return Math.round((asUTC-date.getTime())/60000);}catch(e){return null;}}
+function refreshTz(){if(state.zone){var o=zoneOffsetMin(state.zone,simNow());if(o!==null)state.tz=o;}}
+/* The one offset resolver every dated path must use: the IANA-zone offset in force at the given instant (DST-aware, memoised per zone+hour). Falls back to state.tz only when the place carries no zone (manual coordinates) or the zone lookup fails. */
+var _offCache={};
+function offsetAt(date){if(!state.zone)return state.tz;var k=state.zone+"|"+Math.floor(date.getTime()/36e5);var v=_offCache[k];if(v===undefined){var o=zoneOffsetMin(state.zone,date);v=(o===null||isNaN(o))?state.tz:o;_offCache[k]=v;}return v;}
+/* UTC instant of a local wall-clock time on an arbitrary date, with the offset resolved FOR THAT DATE (two passes, so DST-transition days land right). */
+function localInstant(y,m,d,mins){var guess=Date.UTC(y,m,d,Math.floor(mins/60),mins%60);var tz=offsetAt(new Date(guess-state.tz*60000));var inst=guess-tz*60000;var tz2=offsetAt(new Date(inst));if(tz2!==tz)inst=guess-tz2*60000;return new Date(inst);}
+function fmtT(d){if(!d||isNaN(d))return"—";var s=shifted(d);return String(s.getUTCHours()).padStart(2,"0")+":"+String(s.getUTCMinutes()).padStart(2,"0")}
+function fmtT24(d){if(!d||isNaN(d))return"—";var s=shifted(d);return String(s.getUTCHours()).padStart(2,"0")+":"+String(s.getUTCMinutes()).padStart(2,"0")}
+function fmtUtcOff(mins){var sign=mins<0?"−":"+",a=Math.abs(mins),h=Math.floor(a/60),m=a%60;return "UTC"+sign+h+(m?":"+String(m).padStart(2,"0"):"")}
+function fmtRA(h){if(h==null||isNaN(h))return"—";h=((h%24)+24)%24;var H=Math.floor(h),M=Math.floor((h-H)*60),S=Math.floor(((h-H)*60-M)*60+0.5);if(S===60){S=0;M++}if(M===60){M=0;H=(H+1)%24}return H+"h "+String(M).padStart(2,"0")+"m "+String(S).padStart(2,"0")+"s"}
+function fmtDur(ms){if(ms==null||isNaN(ms))return"—";var neg=ms<0;ms=Math.abs(ms);var h=Math.floor(ms/36e5),m=Math.round(ms%36e5/6e4);if(m===60){h++;m=0}var mm=String(m).padStart(2,"0");if(state.lang==="en")return(neg?"−":"")+h+"hr "+mm+"min";if(state.lang==="zh-Hans")return(neg?"−":"")+h+" 小时 "+mm+" 分钟";return(neg?"−":"")+h+" 小時 "+mm+" 分鐘"}
+function fmtDist(km){var au=(km/149597870.7).toFixed(4);if(state.lang==="en")return[(km/1e6).toFixed(2)+" M km",t("about")+" "+au+" AU"];if(state.lang==="zh-Hans")return[(km/1e8).toFixed(3)+" 亿公里",t("about")+" "+au+" 天文单位 (AU)"];return[(km/1e8).toFixed(3)+" 億公里",t("about")+" "+au+" 天文單位 (AU)"]}
+function fmtDurZh(ms){if(ms==null||isNaN(ms))return"—";var h=Math.floor(ms/36e5),m=Math.round(ms%36e5/6e4);if(m===60){h++;m=0}return h+" 小時 "+m+" 分鐘"}
+function simNow(){return state.live?new Date():state.date}
+function dayStart(d){var tz=offsetAt(d);var s=new Date(d.getTime()+tz*60000);var mid=Date.UTC(s.getUTCFullYear(),s.getUTCMonth(),s.getUTCDate());var st=mid-tz*60000;var tz2=offsetAt(new Date(st));if(tz2!==tz)st=mid-tz2*60000;return new Date(st)}
+function polarNote(times){if(!times.sunrise&&!times.sunset)return null;if(!times.sunrise||!times.sunset)return t("polarNote");return null}
+
+/* ============ SVG helpers ============ */
+function altCurveSVG(el,opts){opts=opts||{};var hasMarkers=opts.markers&&opts.markers.length>0;var hasSpans=opts.spans&&opts.spans.length>0;var W=720,H=hasSpans?344:306,padL=42,padR=10,padT=hasMarkers?34:16,padB=hasSpans?76:28;var x0=padL,x1=W-padR,yTop=padT,yBot=H-padB;
+ var altMax=opts.altMax||90,altMin=opts.altMin||-40;function X(mins){return x0+(x1-x0)*mins/1440}function Y(a){return yBot-(a-altMin)/(altMax-altMin)*(yBot-yTop)}
+ var base=dayStart(simNow());var pts=[],nowMin=(simNow()-base)/60000;var nowAlt=null;
+ for(var m=0;m<=1440;m+=10){var p=getPosition(new Date(base.getTime()+m*60000),state.lat,state.lon);pts.push([m,p.altitude]);if(Math.abs(m-nowMin)<5)nowAlt=p.altitude}
+ if(nowAlt===null)nowAlt=getPosition(simNow(),state.lat,state.lon).altitude;
+ var path=pts.map(function(p,i){return(i?"L":"M")+X(p[0]).toFixed(1)+" "+Y(Math.max(altMin,Math.min(altMax,p[1]))).toFixed(1)}).join(" ");
+ var s="";
+ /* twilight bands */
+ if(opts.bands){var bands=[[-6,-12,"rgba(87,215,255,.08)"],[-12,-18,"rgba(180,140,255,.08)"],[-18,altMin,"rgba(120,90,220,.05)"]];bands.forEach(function(b){s+='<rect x="'+x0+'" y="'+Y(b[0])+'" width="'+(x1-x0)+'" height="'+(Y(b[1])-Y(b[0]))+'" fill="'+b[2]+'"/>';});}
+ s+='<rect x="'+x0+'" y="'+Y(0)+'" width="'+(x1-x0)+'" height="'+(Y(-6)-Y(0))+'" fill="rgba(255,216,61,.07)"/>';
+ /* gridlines */
+ [[0,"#ffffff",2.4,"0\u00b0"],[-6,"#57d7ff",1.1,"\u22126\u00b0"],[-12,"#57d7ff",0.7,"\u221212\u00b0"],[-18,"#b48cff",0.7,"\u221218\u00b0"]].forEach(function(g){if(g[0]<altMin)return;var dash=g[0]===0?"":' stroke-dasharray="3 4"';s+='<line x1="'+x0+'" x2="'+x1+'" y1="'+Y(g[0])+'" y2="'+Y(g[0])+'" stroke="'+g[1]+'" stroke-width="'+g[2]+'"'+dash+' opacity="'+(g[0]===0?0.95:0.6)+'"/><text x="'+(x0-4)+'" y="'+(Y(g[0])+4)+'" fill="#9fb0d0" font-size="10.5" text-anchor="end" font-family="monospace">'+g[3]+'</text>';});
+ for(var h=0;h<=24;h+=3){s+='<text x="'+X(h*60)+'" y="'+(H-8)+'" fill="#9fb0d0" font-size="10.5" text-anchor="middle" font-family="monospace">'+String(h).padStart(2,"0")+'</text><line x1="'+X(h*60)+'" x2="'+X(h*60)+'" y1="'+yTop+'" y2="'+yBot+'" stroke="rgba(255,255,255,.06)"/>';}
+ s+='<path d="'+path+'" fill="none" stroke="#ff9a2e" stroke-width="2.8" stroke-linejoin="round"/>';
+ /* staggered two-row event markers: adjacent labels never collide */
+ if(hasMarkers){opts.markers.forEach(function(mk){if(!mk.t)return;var mm=(mk.t-base)/60000;if(mm<0||mm>1440)return;var row=mk.row||0;var ly=row===1?(yTop-18):(yTop-4);var anchor=mk.anchor||"middle";var dx=anchor==="end"?-3:(anchor==="start"?3:0);s+='<line x1="'+X(mm)+'" x2="'+X(mm)+'" y1="'+(ly+2)+'" y2="'+yBot+'" stroke="'+(mk.c||"#ffffff")+'" stroke-width="1.2" stroke-dasharray="2 4" opacity="0.72"/><text x="'+(X(mm)+dx)+'" y="'+ly+'" fill="'+(mk.c||"#fff")+'" font-size="10" font-weight="600" text-anchor="'+anchor+'">'+mk.label+'</text>';});}
+ /* stepped cumulative span bars: one row per span below the axis */
+ if(hasSpans){opts.spans.forEach(function(sp,idx){if(!sp.a||!sp.b)return;var a=(sp.a-base)/60000,b=(sp.b-base)/60000;var yy=yBot+13+idx*13;s+='<line x1="'+X(a)+'" x2="'+X(b)+'" y1="'+yy+'" y2="'+yy+'" stroke="'+sp.c+'" stroke-width="3.2" stroke-linecap="round"/><text x="'+((X(a)+X(b))/2)+'" y="'+(yy-3)+'" fill="'+sp.c+'" font-size="9.5" font-weight="700" text-anchor="middle" font-family="monospace">'+sp.label+'</text>';});}
+ /* now sun */
+ var cx=X(nowMin),cy=Y(Math.max(altMin,Math.min(altMax,nowAlt)));
+ s+='<line x1="'+cx+'" x2="'+cx+'" y1="'+yTop+'" y2="'+yBot+'" stroke="rgba(255,216,61,.4)" stroke-dasharray="2 3"/>';
+ s+='<circle cx="'+cx+'" cy="'+cy+'" r="13" fill="rgba(255,207,63,.28)"/><circle cx="'+cx+'" cy="'+cy+'" r="7.5" fill="#ffcf3f" stroke="#fff2b0" stroke-width="1.6"/>';
+ el.setAttribute("viewBox","0 0 "+W+" "+H);
+ el.innerHTML=s;
+ return{nowAlt:nowAlt};}
+
+/* ============ Render ============ */
+function eventsList(T){return[
+ {key:"nightEnd",name:t("ev_nightEnd"),t:T.nightEnd,c:"#b48cff"},
+ {key:"nauticalDawn",name:t("ev_nauticalDawn"),t:T.nauticalDawn,c:"#57d7ff"},
+ {key:"dawn",name:t("ev_dawn"),t:T.dawn,c:"#ffd83d"},
+ {key:"sunrise",name:t("ev_sunrise"),t:T.sunrise,c:"#ff9a2e"},
+ {key:"goldenHourEnd",name:t("ev_goldenHourEnd"),t:T.goldenHourEnd,c:"#ffcf3f"},
+ {key:"solarNoon",name:t("ev_solarNoon"),t:T.solarNoon,c:"#ffffff"},
+ {key:"goldenHour",name:t("ev_goldenHour"),t:T.goldenHour,c:"#ffcf3f"},
+ {key:"sunset",name:t("ev_sunset"),t:T.sunset,c:"#ff9a2e"},
+ {key:"dusk",name:t("ev_dusk"),t:T.dusk,c:"#ffd83d"},
+ {key:"nauticalDusk",name:t("ev_nauticalDusk"),t:T.nauticalDusk,c:"#57d7ff"},
+ {key:"night",name:t("ev_night"),t:T.night,c:"#b48cff"},
+ {key:"nadir",name:t("ev_nadir"),t:T.nadir,c:"#8fa3cc"}].filter(function(e){return e.t});}
+
+function render(){
+ refreshTz();
+ var now=simNow(),base=dayStart(now),T=getTimes(base,state.lat,state.lon),pos=getPosition(now,state.lat,state.lon);
+ var sNow=shifted(now);
+ /* topbar */
+ var dowNames=t("dow"),monNames=t("mon"),monEn=t("monEn");
+ $("tbDow").textContent=dowNames[sNow.getUTCDay()];
+ $("tbDate").textContent=state.lang==="en"?(monEn[sNow.getUTCMonth()]+" "+sNow.getUTCDate()+", "+sNow.getUTCFullYear()):(sNow.getUTCFullYear()+" 年 "+monNames[sNow.getUTCMonth()]+" "+sNow.getUTCDate()+" 日");
+ $("tbLoc").textContent="📍 "+state.place+" · "+state.lat.toFixed(4)+"°, "+state.lon.toFixed(4)+"°";
+ $("tbClock").textContent=fmtT24(now)+":"+String(sNow.getUTCSeconds()).padStart(2,"0");
+ var phase=pos.altitude>6?t("phaseDay"):pos.altitude>0?t("phaseGolden"):pos.altitude>-6?t("phaseCivil"):pos.altitude>-12?t("phaseNautical"):pos.altitude>-18?t("phaseAstro"):t("phaseNight");
+ $("tbPhase").textContent=phase+" · "+t("altWord")+" "+pos.altitude.toFixed(1)+"°";
+ document.body.setAttribute("data-phase",pos.altitude>6?"day":pos.altitude>-1?"golden":pos.altitude>-12?"twilight":"night");
+ $("tbUtc").textContent="UTC "+String(now.getUTCHours()).padStart(2,"0")+":"+String(now.getUTCMinutes()).padStart(2,"0")+":"+String(now.getUTCSeconds()).padStart(2,"0");
+ var devZone=Intl.DateTimeFormat().resolvedOptions().timeZone;
+ $("tzInfo").textContent=t("tzZone")+": "+(state.zone||"—")+" · "+fmtUtcOff(state.tz)+" · "+t("tzDevice")+": "+devZone+((state.zone&&state.zone!==devZone)?" "+t("tzDiff"):"");
+ var note=polarNote(T);
+
+ /* ---- Screen 1 ---- */
+ altCurveSVG($("chart1"),{});
+ var evs=eventsList(T).slice().sort(function(a,b){return a.t-b.t});
+ /* countdown must roll across midnight: search yesterday+today+tomorrow */
+ var Ty=getTimes(new Date(base.getTime()-dayMs),state.lat,state.lon),Tm=getTimes(new Date(base.getTime()+dayMs),state.lat,state.lon);
+ var evsAll=eventsList(Ty).concat(eventsList(T),eventsList(Tm)).sort(function(a,b){return a.t-b.t});
+ var next=null,prev=null;
+ for(var i=0;i<evsAll.length;i++){if(evsAll[i].t>now){next=evsAll[i];prev=evsAll[i-1]||null;break}}
+ if(next){var diff=Math.max(0,next.t-now);
+   $("cdEv").textContent=t("nextEvent")+" · "+next.name;
+   var dh=Math.floor(diff/36e5),dm=Math.floor(diff%36e5/6e4),ds2=Math.floor(diff%6e4/1e3);
+   $("cdBig").innerHTML=(state.lang==="en"?"in ":"")+"<b>"+dh+"</b> "+t("hours")+" <b>"+dm+"</b> "+t("minutes")+" <b>"+ds2+"</b> "+t("seconds");
+   var tomorrow=shifted(next.t).getUTCDate()!==shifted(now).getUTCDate();
+   $("cdAt").innerHTML="@ <b>"+(tomorrow?t("tomorrow"):"")+fmtT24(next.t)+"</b>";
+   var span=prev?(next.t-prev.t):dayMs;var el2=prev?(now-prev.t):0;
+   $("cdBar").style.width=Math.max(0,Math.min(100,el2/span*100)).toFixed(1)+"%";
+   $("cdPrev").textContent=prev?(t("prevEvent")+prev.name+" · "+fmtT(prev.t)+t("prevNote")):"";
+ }
+ var dayLen=(T.sunrise&&T.sunset)?(T.sunset-T.sunrise):null;
+ var dist=fmtDist(sunDistanceKm(now));
+ $("s1Stats").innerHTML=
+  stat(t("statAlt"),pos.altitude.toFixed(2)+"°",t("statAz")+" "+pos.azimuth.toFixed(1)+"°")+
+  stat(t("sunriseSunset"),fmtT(T.sunrise)+" → "+fmtT(T.sunset),t("dayLength")+" "+fmtDur(dayLen))+
+  stat(t("solarNoon"),fmtT(T.solarNoon),t("maxWord")+" "+noonAlt(T).toFixed(1)+"°")+
+  stat(t("distance"),dist[0],dist[1])+
+  (note?'<div class="stat"><div class="k">'+t("noteW")+'</div><div class="v" style="font-size:15px;color:var(--cyan)">'+note+'</div></div>':"");
+
+ /* ---- Screen 2 ---- */
+ altCurveSVG($("chart2"),{markers:[
+   {t:T.dawn,label:t("mkDawn"),c:"#ffd83d",row:1,anchor:"end"},{t:T.sunrise,label:t("mkSunrise"),c:"#ff9a2e",row:0,anchor:"start"},{t:T.solarNoon,label:t("mkNoon"),c:"#ffffff",row:1,anchor:"middle"},{t:T.sunset,label:t("mkSunset"),c:"#ff9a2e",row:0,anchor:"end"},{t:T.dusk,label:t("mkDusk"),c:"#ffd83d",row:1,anchor:"start"}]});
+ $("nowElev").innerHTML=t("nowElev")+" <b style='color:var(--yellow);font-family:var(--mono)'>"+pos.altitude.toFixed(2)+"°</b> · "+t("nowAz")+" "+pos.azimuth.toFixed(2)+"° · "+t("decl")+" "+pos.declination.toFixed(2)+"° · "+t("ra")+" "+fmtRA(pos.ra);
+ if(T.dawn&&T.dusk){var n1=T.dawn-base,n2=T.dusk-T.dawn,n3=dayMs-(T.dusk-base);var twiEach=(T.sunrise&&T.dawn)?(T.sunrise-T.dawn):0;
+  $("segBar").innerHTML='<div class="n" style="flex:'+n1+'">'+t("segNight")+' '+fmtDur(n1)+'</div><div class="d" style="flex:'+n2+'">'+t("segLight")+' '+fmtDur(n2)+'（'+t("segTwi")+' '+Math.round(twiEach/6e4)+' '+t("exMin")+'）</div><div class="n" style="flex:'+n3+'">'+t("segNight")+' '+fmtDur(n3)+'</div>';
+  $("segTxt").textContent=t("segTxtA")+" "+fmtT(T.dawn)+" · "+t("ev_sunrise")+" "+fmtT(T.sunrise)+" · "+t("ev_solarNoon")+" "+fmtT(T.solarNoon)+" · "+t("ev_sunset")+" "+fmtT(T.sunset)+" · "+t("ev_dusk")+" "+fmtT(T.dusk)+"。"+t("segTxtB");
+  var pl=Math.max(0,Math.min(100,(now-T.dawn)/(T.dusk-T.dawn)*100));if(now<T.dawn)pl=0;if(now>T.dusk)pl=100;
+  $("pctLight").textContent=pl.toFixed(2)+"%";$("pctLightL").textContent=t("pctLight")+" "+fmtDur(T.dusk-T.dawn)+t("pctLightSuffix");
+ } else {$("segBar").innerHTML="";$("segTxt").textContent=note||"";$("pctLight").textContent="—";}
+ var pd=(now-base)/dayMs*100;$("pctDay").textContent=pd.toFixed(2)+"%";$("pctDayL").textContent=t("pctDay")+" "+fmtT24(now);
+ $("tblEvents").querySelector("tbody").innerHTML=evs.map(function(e){return'<tr><td>'+e.name+'</td><td class="num">'+fmtT24(e.t)+'</td></tr>'}).join("");
+
+ /* ---- Screen 3 ---- */
+ altCurveSVG($("chart3"),{bands:true,altMin:-24,altMax:60,spans:(T.sunrise&&T.sunset)?[
+   {a:T.sunrise,b:T.sunset,label:fmtDur(T.sunset-T.sunrise),c:"#ff9a2e"},
+   {a:T.dawn,b:T.dusk,label:fmtDur(T.dusk-T.dawn),c:"#ffd83d"},
+   {a:T.nauticalDawn,b:T.nauticalDusk,label:fmtDur(T.nauticalDusk-T.nauticalDawn),c:"#57d7ff"},
+   {a:T.nightEnd,b:T.night,label:fmtDur(T.night-T.nightEnd),c:"#b48cff"}]:[]});
+ var twRows=[
+  [t("twiAstro"),T.nightEnd,T.night,(T.sunrise&&T.nightEnd)?T.sunrise-T.nightEnd:null],
+  [t("twiNaut"),T.nauticalDawn,T.nauticalDusk,(T.sunrise&&T.nauticalDawn)?T.sunrise-T.nauticalDawn:null],
+  [t("twiCivil"),T.dawn,T.dusk,(T.sunrise&&T.dawn)?T.sunrise-T.dawn:null]];
+ $("tblTwilight").querySelector("tbody").innerHTML=twRows.map(function(r){return'<tr><td>'+r[0]+'</td><td class="num">'+fmtT(r[1])+'</td><td class="num">'+fmtT(r[2])+'</td><td class="num">'+fmtDur(r[3])+'</td></tr>'}).join("")+
+  '<tr><td>'+t("twiSR")+'</td><td class="num">'+fmtT(T.sunrise)+'</td><td class="num">'+fmtT(T.sunset)+'</td><td class="num">—</td></tr>';
+ if(T.nightEnd&&T.night&&T.sunrise&&T.sunset){var totM=(T.sunrise-T.nightEnd)+(T.night-T.sunset);
+  $("twiTotals").textContent=t("twiTotal")+" "+fmtDur(totM)+"（"+t("twiMorning")+" "+fmtDur(T.sunrise-T.nightEnd)+" ＋ "+t("twiEvening")+" "+fmtDur(T.night-T.sunset)+"）；"+t("twiNightLen")+" "+fmtDur(dayMs-(T.night-T.nightEnd))+"。"+t("twiVideo");}
+ $("spanBars").innerHTML=[[t("spanSR"),T.sunrise,T.sunset,"#ff9a2e"],[t("spanCivil"),T.dawn,T.dusk,"#ffd83d"],[t("spanNaut"),T.nauticalDawn,T.nauticalDusk,"#57d7ff"],[t("spanAstro"),T.nightEnd,T.night,"#b48cff"]].map(function(r){
+   if(!r[1]||!r[2])return"";var d=r[2]-r[1];var w=Math.min(100,d/(19*36e5)*100);
+   return'<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px"><span>'+r[0]+'</span><b style="font-family:var(--mono);color:'+r[3]+'">'+fmtDur(d)+'</b></div><div class="bar" style="margin-top:5px"><i style="width:'+w+'%;background:'+r[3]+'"></i></div></div>'}).join("");
+
+ /* ---- Screen 4 ---- */
+ renderAltitude(T,pos,base);
+ /* ---- Screen 5 ---- */
+ renderAzimuth(T,pos,base);
+ /* ---- Screen 6 ---- */
+ renderDome(T,pos,base);
+ /* ---- Extras ---- */
+ renderExtras(T,base,now);
+ renderYear(base);
+ /* controls reflect */
+ $("inLat").value=state.lat;$("inLon").value=state.lon;
+ var sd=shifted(now);$("inDate").value=sd.getUTCFullYear()+"-"+String(sd.getUTCMonth()+1).padStart(2,"0")+"-"+String(sd.getUTCDate()).padStart(2,"0");
+ var mins=sd.getUTCHours()*60+sd.getUTCMinutes();$("inScrub").value=mins;$("scrubVal").textContent=fmtT24(now);
+ /* an open PDF preview goes stale when location / year / language changes */
+ var pov=$("pdfOverlay");
+ if(pov&&!pov.hidden&&typeof pdfKey!=="undefined"&&pdfKey&&pdfKey!==curPdfKey()){$("pdfStale").hidden=false;$("pdfStale").textContent=t("pdfStale");$("btnPdfSave").disabled=true;}
+ var cov=$("csvOverlay");
+ if(cov&&!cov.hidden&&typeof csvKey!=="undefined"&&csvKey&&csvKey!==curPdfKey()){$("csvStale").hidden=false;$("csvStale").textContent=t("csvStale");$("btnCsvDownload").disabled=true;}
+}
+function stat(k,v,s){return'<div class="stat"><div class="k">'+k+'</div><div class="v">'+v+'</div>'+(s?'<div class="s">'+s+'</div>':"")+'</div>'}
+function noonAlt(T){if(!T.solarNoon)return 0;return getPosition(T.solarNoon,state.lat,state.lon).altitude}
+function yearNoonAlt(month,day){var y=shifted(simNow()).getUTCFullYear();var d=localInstant(y,month,day,720);var t=getTimes(d,state.lat,state.lon);return t.solarNoon?getPosition(t.solarNoon,state.lat,state.lon).altitude:0}
+function yearMidAlt(){var y=shifted(simNow()).getUTCFullYear();var d=localInstant(y,0,1,720);var t=getTimes(d,state.lat,state.lon);return t.nadir?getPosition(t.nadir,state.lat,state.lon).altitude:0}
+
+function renderAltitude(T,pos,base){
+ var W=720,H=360,ox=360,gy=298,R=228;
+ var noonMs=T.solarNoon?T.solarNoon.getTime():base.getTime()+12*36e5;
+ function afterNoon(ms){return ms>=noonMs}
+ function sunXY(alt,ms){var a=Math.max(-90,Math.min(90,alt))*rad;var side=afterNoon(ms)?1:-1;return[ox+side*Math.cos(a)*R,gy-Math.sin(a)*R]}
+ var s="";
+ /* ground shading */
+ s+='<rect x="30" y="'+gy+'" width="660" height="'+(H-gy)+'" fill="rgba(255,255,255,.035)"/>';
+ /* altitude gridlines 30/60 */
+ [30,60].forEach(function(alt){var y=gy-R*Math.sin(alt*rad);s+='<line x1="30" x2="690" y1="'+y+'" y2="'+y+'" stroke="rgba(255,255,255,.13)" stroke-dasharray="3 5"/><text x="36" y="'+(y-6)+'" fill="#9fb0d0" font-size="10.5" font-family="monospace">'+alt+'\u00b0</text>';});
+ s+='<text x="36" y="'+(gy-R-8)+'" fill="#9fb0d0" font-size="10.5" font-family="monospace">90\u00b0 '+t("zen")+'</text>';
+ /* below-horizon night arc (faint) */
+ s+='<path d="M '+(ox-56)+' '+gy+' A 56 56 0 0 0 '+(ox+56)+' '+gy+'" fill="none" stroke="rgba(143,163,204,.4)" stroke-width="1.2" stroke-dasharray="3 4"/>';
+ /* today's arc: position from real altitude + am/pm side */
+ var path="";
+ for(var m=0;m<=1440;m+=10){var dt=new Date(base.getTime()+m*60000);var pp=getPosition(dt,state.lat,state.lon);if(pp.altitude<-0.5){path="";continue}var q=sunXY(Math.max(0,pp.altitude),dt.getTime());path+=(path?"L":"M")+q[0].toFixed(1)+" "+q[1].toFixed(1)+" ";}
+ s+='<path d="'+path+'" fill="none" stroke="#a9bde0" stroke-width="2.3" stroke-dasharray="7 5" opacity="1"/>';
+ /* hour dots + labels along arc */
+ for(var h=0;h<=24;h+=2){var dt2=new Date(base.getTime()+h*3600000);var p2=getPosition(dt2,state.lat,state.lon);if(p2.altitude<0.5)continue;var q2=sunXY(p2.altitude,dt2.getTime());s+='<circle cx="'+q2[0]+'" cy="'+q2[1]+'" r="2.6" fill="#57d7ff"/><text x="'+q2[0]+'" y="'+(q2[1]-9)+'" fill="#9fb0d0" font-size="10" text-anchor="middle" font-family="monospace">'+h+':00 \u00b7 '+Math.round(p2.altitude)+'\u00b0</text>';}
+ /* horizon line + sunrise/sunset ground markers */
+ s+='<line x1="30" x2="690" y1="'+gy+'" y2="'+gy+'" stroke="#fff" stroke-width="2.4"/>';
+ if(T.sunrise)s+='<circle cx="'+(ox-R)+'" cy="'+gy+'" r="4.5" fill="#ff9a2e"/><text x="'+(ox-R)+'" y="'+(gy+20)+'" fill="#ff9a2e" font-size="11" text-anchor="middle">'+t("ev_sunrise")+' '+fmtT(T.sunrise)+'</text>';
+ if(T.sunset)s+='<circle cx="'+(ox+R)+'" cy="'+gy+'" r="4.5" fill="#ff6a2e"/><text x="'+(ox+R)+'" y="'+(gy+20)+'" fill="#ff6a2e" font-size="11" text-anchor="middle">'+t("ev_sunset")+' '+fmtT(T.sunset)+'</text>';
+ s+='<text x="36" y="'+(gy-8)+'" fill="#9fb0d0" font-size="11">'+t("east")+'</text><text x="684" y="'+(gy-8)+'" fill="#9fb0d0" font-size="11" text-anchor="end">'+t("west")+'</text>';
+ /* observer */
+ s+='<circle cx="'+ox+'" cy="'+(gy-38)+'" r="7" fill="none" stroke="#eef2ff" stroke-width="2"/><line x1="'+ox+'" y1="'+(gy-31)+'" x2="'+ox+'" y2="'+(gy-12)+'" stroke="#eef2ff" stroke-width="2"/><line x1="'+ox+'" y1="'+(gy-12)+'" x2="'+(ox-9)+'" y2="'+gy+'" stroke="#eef2ff" stroke-width="2"/><line x1="'+ox+'" y1="'+(gy-12)+'" x2="'+(ox+9)+'" y2="'+gy+'" stroke="#eef2ff" stroke-width="2"/><line x1="'+ox+'" y1="'+(gy-26)+'" x2="'+(ox+13)+'" y2="'+(gy-20)+'" stroke="#eef2ff" stroke-width="2"/>';
+ s+='<text x="'+ox+'" y="'+(gy+20)+'" fill="#eef2ff" font-size="11" text-anchor="middle">'+t("obs")+'</text>';
+ /* sun now */
+ var nowMs=simNow().getTime(),hx=ox,hy=gy-34;
+ if(pos.altitude>=0){var sp=sunXY(pos.altitude,nowMs);
+  s+='<line x1="'+hx+'" y1="'+hy+'" x2="'+sp[0]+'" y2="'+sp[1]+'" stroke="#ffd83d" stroke-width="1.6"/>';
+  var side2=afterNoon(nowMs)?1:-1,a1=Math.atan2(sp[1]-hy,sp[0]-hx),a0=side2>0?0:PI,arcPts=[];
+  for(var k=0;k<=10;k++){var aa=a0+(a1-a0)*k/10;arcPts.push((k?"L":"M")+(hx+50*Math.cos(aa)).toFixed(1)+" "+(hy+50*Math.sin(aa)).toFixed(1));}
+  s+='<path d="'+arcPts.join(" ")+'" fill="none" stroke="#57d7ff" stroke-width="1.5"/><text x="'+(hx+side2*64)+'" y="'+(hy-8)+'" fill="#57d7ff" font-size="13" font-weight="700" text-anchor="'+(side2>0?"start":"end")+'" font-family="monospace">'+pos.altitude.toFixed(1)+'\u00b0</text>';
+  s+='<circle cx="'+sp[0]+'" cy="'+sp[1]+'" r="15" fill="rgba(255,207,63,.25)"/><circle cx="'+sp[0]+'" cy="'+sp[1]+'" r="8.5" fill="#ffcf3f" stroke="#fff2b0" stroke-width="1.6"/>';
+ } else {var na=Math.max(-90,Math.min(90,pos.altitude))*rad,ns=afterNoon(nowMs)?1:-1,nx=ox+ns*Math.cos(na)*56,ny=gy-Math.sin(na)*56;
+  s+='<line x1="'+hx+'" y1="'+hy+'" x2="'+nx+'" y2="'+ny+'" stroke="rgba(143,163,204,.55)" stroke-width="1.3" stroke-dasharray="3 4"/>';
+  s+='<circle cx="'+nx+'" cy="'+ny+'" r="7.5" fill="#8fa3cc" stroke="#cdd8f2" stroke-width="1.2"/>';
+  s+='<text x="'+ox+'" y="42" fill="#cdd8f2" font-size="14.5" font-weight="700" text-anchor="middle">'+t("s4Below")+' \u00b7 '+pos.altitude.toFixed(1)+'\u00b0</text>';
+  s+='<text x="'+ox+'" y="64" fill="#9fb0d0" font-size="11.5" text-anchor="middle">'+t("ev_sunrise")+' '+fmtT(T.sunrise)+' \u00b7 '+t("ev_sunset")+' '+fmtT(T.sunset)+'</text>';
+ }
+ $("chart4").innerHTML=s;
+ var hi=yearNoonAlt(5,21),lo=yearNoonAlt(11,21);
+ $("s4Stats").innerHTML=
+  stat(t("s4Max"),noonAlt(T).toFixed(1)+"\u00b0",t("atNoon")+" "+fmtT(T.solarNoon))+
+  stat(t("s4Min"),yearMidToday(T).toFixed(1)+"\u00b0",t("atMid")+" "+fmtT(T.nadir))+
+  stat(t("s4Now"),pos.altitude.toFixed(2)+"\u00b0",t("decl")+" "+pos.declination.toFixed(2)+"\u00b0")+
+  stat(t("s4YearMax"),hi.toFixed(1)+"\u00b0",t("summer"))+
+  stat(t("s4YearMin"),lo.toFixed(1)+"\u00b0",t("winter"));
+}
+function yearMidToday(T){return T.nadir?getPosition(T.nadir,state.lat,state.lon).altitude:0}
+
+function polarPt(cx,cy,R,azDeg,rFrac){var a=(azDeg-90)*rad;return[cx+Math.cos(a)*R*rFrac,cy+Math.sin(a)*R*rFrac]}
+var azTimeCache={key:"",labels:null};
+function azimuthTimeLabels(base){
+ /* perimeter "time sun reaches each 30\u00b0 azimuth" labels: full-day scan cached per day+location, NOT recomputed on per-second renders */
+ var key=state.lat.toFixed(4)+"|"+state.lon.toFixed(4)+"|"+base.getTime();
+ if(azTimeCache.key===key&&azTimeCache.labels)return azTimeCache.labels;
+ var labels=[];
+ for(var az=0;az<360;az+=30){var best=null,bd=1e9;for(var m=0;m<=1440;m+=5){var pp=getPosition(new Date(base.getTime()+m*60000),state.lat,state.lon);if(pp.altitude<-1)continue;var dd=Math.abs(((pp.azimuth-az+540)%360)-180);if(dd<bd){bd=dd;best=m}}if(best!==null&&bd<4)labels.push({az:az,mins:best});}
+ azTimeCache={key:key,labels:labels};
+ return labels;
+}
+function renderAzimuth(T,pos,base){
+ var cx=280,cy=270,R=190;var s="";
+ $("chart5").setAttribute("viewBox","0 0 560 560");
+ [1,0.66,0.33].forEach(function(f){s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+(R*f)+'" fill="none" stroke="rgba(255,255,255,.14)"/>';});
+ for(var a=0;a<360;a+=15){var p1=polarPt(cx,cy,R,a,0.97),p2=polarPt(cx,cy,R,a,1);s+='<line x1="'+p1[0]+'" y1="'+p1[1]+'" x2="'+p2[0]+'" y2="'+p2[1]+'" stroke="rgba(255,255,255,.35)"/>';}
+ var cardL=state.lang==="en"?["N","E","S","W"]:["\u5317","\u6771","\u5357","\u897f"];
+ [[0,cardL[0],R+28],[90,cardL[1],R+24],[180,cardL[2],R+24],[270,cardL[3],R+24]].forEach(function(d){var p=polarPt(cx,cy,d[2],d[0],1);s+='<text x="'+p[0]+'" y="'+(p[1]+5)+'" fill="'+(d[0]===0?"#ffd83d":"#eef2ff")+'" font-size="15" font-weight="700" text-anchor="middle">'+d[1]+'</text>';});
+ /* hour ring 0-23 positioned by actual azimuth */
+ for(var h=0;h<24;h++){var hh=getPosition(new Date(base.getTime()+h*3600000+1800000),state.lat,state.lon);var p3=polarPt(cx,cy,R-16,hh.azimuth,1);s+='<text x="'+p3[0]+'" y="'+(p3[1]+4)+'" fill="rgba(159,176,208,.75)" font-size="10" text-anchor="middle" font-family="monospace">'+h+'</text>';}
+ /* perimeter azimuth-time labels every 30\u00b0 (cached) */
+ azimuthTimeLabels(base).forEach(function(L){var distR=(L.az===0||L.az===180)?(R+46):(R+40);var pl=polarPt(cx,cy,distR,L.az,1);s+='<text x="'+pl[0]+'" y="'+(pl[1]+4)+'" fill="rgba(159,176,208,.85)" font-size="9.5" text-anchor="middle" font-family="monospace">'+L.az+'\u00b0 '+Math.floor(L.mins/60)+":"+String(L.mins%60).padStart(2,"0")+'</text>';});
+ /* year extreme markers */
+ extremeAzimuths(base).forEach(function(ea){var p=polarPt(cx,cy,R,ea,1);s+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="4.5" fill="#fff" stroke="#060a18" stroke-width="1.4"/>';});
+ /* sun path today (above horizon) */
+ var path="";for(var m2=0;m2<=1440;m2+=10){var p4=getPosition(new Date(base.getTime()+m2*60000),state.lat,state.lon);if(p4.altitude<0){path="";continue}var q2=polarPt(cx,cy,R,p4.azimuth,1);path+=(path?"L":"M")+q2[0].toFixed(1)+" "+q2[1].toFixed(1)+" ";}
+ s+='<path d="'+path+'" fill="none" stroke="#ff9a2e" stroke-width="2" opacity="0.75"/>';
+ /* sunrise/sunset lines */
+ function azAt(tm){return tm?getPosition(tm,state.lat,state.lon).azimuth:null}
+ var raz=azAt(T.sunrise),saz=azAt(T.sunset);
+ if(raz!==null){var pr=polarPt(cx,cy,R,raz,1);s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+pr[0]+'" y2="'+pr[1]+'" stroke="#ff9a2e" stroke-width="1.6"/><circle cx="'+pr[0]+'" cy="'+pr[1]+'" r="5" fill="#ff9a2e"/>';}
+ if(saz!==null){var ps=polarPt(cx,cy,R,saz,1);s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+ps[0]+'" y2="'+ps[1]+'" stroke="#ff6a2e" stroke-width="1.6"/><circle cx="'+ps[0]+'" cy="'+ps[1]+'" r="5" fill="#ff6a2e"/>';}
+ var pc=polarPt(cx,cy,R,pos.azimuth,1);
+ s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+pc[0]+'" y2="'+pc[1]+'" stroke="#ffd83d" stroke-width="2.2"/><circle cx="'+pc[0]+'" cy="'+pc[1]+'" r="13" fill="rgba(255,207,63,.25)"/><circle cx="'+pc[0]+'" cy="'+pc[1]+'" r="7.5" fill="#ffcf3f" stroke="#fff2b0"/>';
+ /* centre hub only \u2014 no readout card in the middle of the compass; the current azimuth / altitude readouts live in the stats row below */
+ s+='<circle cx="'+cx+'" cy="'+cy+'" r="6.5" fill="#0d1430" stroke="rgba(255,255,255,.55)" stroke-width="1.4"/><circle cx="'+cx+'" cy="'+cy+'" r="2.4" fill="#ffd83d"/>';
+ s+='<text x="'+cx+'" y="'+(cy+R+66)+'" fill="#9fb0d0" font-size="11.5" text-anchor="middle">'+t("compassNoon")+' '+fmtT(T.solarNoon)+'</text>';
+ s+='<text x="'+cx+'" y="'+(cy+R+84)+'" fill="#9fb0d0" font-size="11" text-anchor="middle">'+t("compassExtreme")+'</text>';
+ $("chart5").innerHTML=s;
+ $("s5Stats").innerHTML=
+  stat(t("s5Now"),Math.round(pos.azimuth)+"\u00b0",compassName(pos.azimuth))+
+  stat(t("statAlt"),pos.altitude.toFixed(1)+"\u00b0",pos.altitude<0?t("s4Below"):"")+
+  stat(t("s5Rise"),(raz!==null?Math.round(raz)+"\u00b0":"\u2014"),"@ "+fmtT(T.sunrise))+
+  stat(t("s5Set"),(saz!==null?Math.round(saz)+"\u00b0":"\u2014"),"@ "+fmtT(T.sunset))+
+  stat(t("s5Noon"),fmtT(T.solarNoon),t("azWord")+" "+(T.solarNoon?Math.round(getPosition(T.solarNoon,state.lat,state.lon).azimuth)+"\u00b0":"\u2014"));
+}
+function compassName(az){var n=t("compass");return n[Math.round(az/45)%8]}
+function extremeAzimuths(base){var y=shifted(simNow()).getUTCFullYear();var out=[];[ [5,21],[11,21] ].forEach(function(md){var d=localInstant(y,md[0],md[1],720);var t=getTimes(d,state.lat,state.lon);if(t.sunrise)out.push(getPosition(t.sunrise,state.lat,state.lon).azimuth);if(t.sunset)out.push(getPosition(t.sunset,state.lat,state.lon).azimuth);});return out}
+
+function renderDome2D(T,pos,base){
+ var cx=280,cy=280,R=225;var s="";
+ [90,60,30,0].forEach(function(alt){var f=(90-alt)/90;s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+(R*f)+'" fill="none" stroke="rgba(255,255,255,.16)"/><text x="'+(cx+4)+'" y="'+(cy-R*f-4)+'" fill="#9fb0d0" font-size="10.5" font-family="monospace">'+alt+'\u00b0</text>';});
+ var dirs=state.lang==="en"?[[0,"N"],[90,"E"],[180,"S"],[270,"W"]]:[[0,"\u5317"],[90,"\u6771"],[180,"\u5357"],[270,"\u897f"]];dirs.forEach(function(d){var p=polarPt(cx,cy,R+24,d[0],1);s+='<text x="'+p[0]+'" y="'+(p[1]+5)+'" fill="'+(d[0]===0?"#ffd83d":"#eef2ff")+'" font-size="15" font-weight="700" text-anchor="middle">'+d[1]+'</text>';});
+ function domePath(dayBase,color,width,op){var path="";for(var m=0;m<=1440;m+=10){var p=getPosition(new Date(dayBase.getTime()+m*60000),state.lat,state.lon);if(p.altitude<0){path="";continue}var f=(90-p.altitude)/90;var q=polarPt(cx,cy,R,p.azimuth,f);path+=(path?"L":"M")+q[0].toFixed(1)+" "+q[1].toFixed(1)+" ";}return'<path d="'+path+'" fill="none" stroke="'+color+'" stroke-width="'+width+'" opacity="'+op+'"/>';}
+ var y=shifted(simNow()).getUTCFullYear();
+ var jun=localInstant(y,5,21,720),dec=localInstant(y,11,21,720);
+ s+=domePath(dayStart(jun),"#8fa3cc",1.4,0.65)+domePath(dayStart(dec),"#8fa3cc",1.4,0.65);
+ s+='<text x="'+cx+'" y="'+(cy-R-14)+'" fill="#8fa3cc" font-size="11" text-anchor="middle">'+t("domeJun")+'</text>';
+ s+=domePath(base,"#ff9a2e",2.6,1);
+ if(pos.altitude>=0){var f=(90-pos.altitude)/90;var pc=polarPt(cx,cy,R,pos.azimuth,f);s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+pc[0]+'" y2="'+pc[1]+'" stroke="rgba(255,216,61,.5)"/><circle cx="'+pc[0]+'" cy="'+pc[1]+'" r="13" fill="rgba(255,207,63,.25)"/><circle cx="'+pc[0]+'" cy="'+pc[1]+'" r="7.5" fill="#ffcf3f" stroke="#fff2b0"/>';}
+ else{s+='<text x="'+cx+'" y="'+(cy+5)+'" fill="#9fb0d0" font-size="13" text-anchor="middle">'+t("dome2dBelow").replace("{v}",Math.abs(pos.altitude).toFixed(1))+'</text>';}
+ s+='<circle cx="'+cx+'" cy="'+cy+'" r="3" fill="#57d7ff"/><text x="'+(cx+10)+'" y="'+(cy+16)+'" fill="#57d7ff" font-size="11">'+t("zen")+'</text>';
+ $("chart6").innerHTML=s;
+}
+function renderDomeStats(T,pos){
+ $("s6Stats").innerHTML=
+  stat(t("s6Alt"),pos.altitude.toFixed(2)+"\u00b0","")+
+  stat(t("s6Az"),pos.azimuth.toFixed(1)+"\u00b0",compassName(pos.azimuth))+
+  stat(t("s6Peak"),noonAlt(T).toFixed(1)+"\u00b0","@ "+fmtT(T.solarNoon))+
+  stat(t("s6How"),t("s6HowV"),t("s6HowS"));
+}
+
+/* ============ Screen 6: interactive 3D sky dome (Three.js), 2D fallback above ============ */
+var dome3d={ready:false,scene:null,camera:null,renderer:null,todayLine:null,junLine:null,decLine:null,rayLine:null,shadowLine:null,sunGroup:null,rotX:0.48,rotY:0.55,dragging:false,lastX:0,lastY:0,visible:false,looping:false,updateCam:null,kick:null};
+function altAzTo3D(altDeg,azDeg,R){var alt=altDeg*rad,az=azDeg*rad;var horiz=R*Math.cos(alt);return new THREE.Vector3(horiz*Math.sin(az),R*Math.sin(alt),-horiz*Math.cos(az));}
+function makeTextSprite(text,color,scale){var canvas=document.createElement("canvas");canvas.width=256;canvas.height=96;var ctx=canvas.getContext("2d");ctx.font="bold 40px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillStyle=color;ctx.fillText(text,128,48);var tex=new THREE.CanvasTexture(canvas);var mat=new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false});var sp=new THREE.Sprite(mat);sp.scale.set(scale*2.4,scale*0.9,1);return sp;}
+function initDome3D(){
+ var box=$("dome3dContainer");
+ if(!box||dome3d.ready||typeof THREE==="undefined")return;
+ dome3d.ready=true;
+ var w=box.clientWidth||640,h=box.clientHeight||380;
+ var scene=new THREE.Scene();
+ var camera=new THREE.PerspectiveCamera(42,w/h,0.1,100);
+ var renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+ renderer.setSize(w,h);
+ renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+ box.insertBefore(renderer.domElement,box.firstChild);
+ var R=5.0;
+ var disc=new THREE.Mesh(new THREE.CircleGeometry(R,64),new THREE.MeshBasicMaterial({color:0x0d1736,transparent:true,opacity:0.85,side:THREE.DoubleSide}));
+ disc.rotation.x=-PI/2;scene.add(disc);
+ [1,0.66,0.33].forEach(function(f){var ringPts=[];for(var i=0;i<=72;i++){var a=i/72*PI*2;ringPts.push(new THREE.Vector3(Math.cos(a)*R*f,0.01,Math.sin(a)*R*f));}scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPts),new THREE.LineBasicMaterial({color:0x3b4f7a,transparent:true,opacity:0.45})));});
+ var domeWire=new THREE.Mesh(new THREE.SphereGeometry(R,24,12,0,PI*2,0,PI/2),new THREE.MeshBasicMaterial({color:0x57d7ff,wireframe:true,transparent:true,opacity:0.09}));
+ scene.add(domeWire);
+ var cardTxt=state.lang==="en"?["N","E","S","W"]:["\u5317","\u6771","\u5357","\u897f"];[[cardTxt[0],0,-R-0.95,"#ffd83d"],[cardTxt[1],R+0.75,0,"#eef2ff"],[cardTxt[2],0,R+0.75,"#eef2ff"],[cardTxt[3],-R-0.75,0,"#eef2ff"]].forEach(function(d){var sp=makeTextSprite(d[0],d[3],0.95);sp.position.set(d[1],0.25,d[2]);scene.add(sp);});
+ var obs=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.14,0.55,16),new THREE.MeshBasicMaterial({color:0x57d7ff}));
+ obs.position.y=0.275;scene.add(obs);
+ var sunGroup=new THREE.Group();
+ sunGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.24,24,24),new THREE.MeshBasicMaterial({color:0xffdf4d})));
+ sunGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.42,24,24),new THREE.MeshBasicMaterial({color:0xff9a2e,transparent:true,opacity:0.32})));
+ scene.add(sunGroup);
+ function makeLine(color,opacity){var mat=new THREE.LineBasicMaterial({color:color,transparent:opacity<1,opacity:opacity});var line=new THREE.Line(new THREE.BufferGeometry(),mat);scene.add(line);return line;}
+ dome3d.todayLine=makeLine(0xff9a2e,1);
+ dome3d.junLine=makeLine(0x8fa3cc,0.45);
+ dome3d.decLine=makeLine(0x8fa3cc,0.45);
+ dome3d.rayLine=makeLine(0xffd83d,0.8);
+ dome3d.shadowLine=makeLine(0x57d7ff,0.9);
+ dome3d.sunGroup=sunGroup;dome3d.scene=scene;dome3d.camera=camera;dome3d.renderer=renderer;
+ function updateCam(){var dist=13.8;camera.position.set(dist*Math.sin(dome3d.rotY)*Math.cos(dome3d.rotX),dist*Math.sin(dome3d.rotX),dist*Math.cos(dome3d.rotY)*Math.cos(dome3d.rotX));camera.lookAt(0,1.1,0);}
+ dome3d.updateCam=updateCam;updateCam();
+ box.addEventListener("pointerdown",function(ev){dome3d.dragging=true;dome3d.lastX=ev.clientX;dome3d.lastY=ev.clientY;});
+ window.addEventListener("pointermove",function(ev){if(!dome3d.dragging)return;dome3d.rotY-=(ev.clientX-dome3d.lastX)*0.008;dome3d.rotX=Math.max(0.14,Math.min(1.42,dome3d.rotX+(ev.clientY-dome3d.lastY)*0.008));dome3d.lastX=ev.clientX;dome3d.lastY=ev.clientY;updateCam();});
+ window.addEventListener("pointerup",function(){dome3d.dragging=false;});
+ box.addEventListener("pointercancel",function(){dome3d.dragging=false;});
+ box.addEventListener("dblclick",function(){dome3d.rotY=0.55;dome3d.rotX=0.48;updateCam();});
+ window.addEventListener("resize",function(){if(!box.clientWidth||!box.clientHeight)return;camera.aspect=box.clientWidth/box.clientHeight;camera.updateProjectionMatrix();renderer.setSize(box.clientWidth,box.clientHeight);});
+ var reduceMotion=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+ function loop(){if(!dome3d.visible||document.hidden){dome3d.looping=false;return;}requestAnimationFrame(loop);if(!dome3d.dragging&&!reduceMotion){dome3d.rotY+=0.0012;updateCam();}renderer.render(scene,camera);}
+ function kick(){if(dome3d.ready&&dome3d.visible&&!document.hidden&&!dome3d.looping){dome3d.looping=true;requestAnimationFrame(loop);}}
+ dome3d.kick=kick;
+ if("IntersectionObserver" in window){new IntersectionObserver(function(es){es.forEach(function(en){dome3d.visible=en.isIntersecting;});kick();},{threshold:0.05}).observe(box);}else{dome3d.visible=true;}
+ document.addEventListener("visibilitychange",kick);
+ kick();
+}
+function build3DPathPts(dayBase,R){var pts=[];for(var m=0;m<=1440;m+=10){var p=getPosition(new Date(dayBase.getTime()+m*60000),state.lat,state.lon);if(p.altitude>=0)pts.push(altAzTo3D(p.altitude,p.azimuth,R));}return pts;}
+function renderDome(T,pos,base){
+ var box=$("dome3dContainer"),svg=$("chart6");
+ if(typeof THREE!=="undefined"&&box){
+  box.hidden=false;if(svg)svg.style.display="none";
+  initDome3D();
+  if(dome3d.ready){
+   var R=5.0;var y=shifted(simNow()).getUTCFullYear();
+   var jun=dayStart(localInstant(y,5,21,720));
+   var dec=dayStart(localInstant(y,11,21,720));
+   dome3d.todayLine.geometry.setFromPoints(build3DPathPts(base,R));
+   dome3d.junLine.geometry.setFromPoints(build3DPathPts(jun,R));
+   dome3d.decLine.geometry.setFromPoints(build3DPathPts(dec,R));
+   var ro=$("dome3dReadout");if(ro)ro.textContent=t("altAbbr")+" "+pos.altitude.toFixed(1)+"\u00b0 \u00b7 "+t("azAbbr")+" "+pos.azimuth.toFixed(1)+"\u00b0 ("+compassName(pos.azimuth)+")";
+   var belowEl=$("dome3dBelow");
+   if(pos.altitude>=0){
+    if(belowEl)belowEl.hidden=true;
+    var sp=altAzTo3D(pos.altitude,pos.azimuth,R);
+    dome3d.sunGroup.visible=true;dome3d.sunGroup.position.copy(sp);
+    dome3d.rayLine.visible=true;dome3d.rayLine.geometry.setFromPoints([new THREE.Vector3(0,0.3,0),sp]);
+    var shadowLen=Math.min(R*0.9,1.4/Math.max(0.22,Math.tan(pos.altitude*rad)));
+    var oppAz=(pos.azimuth+180)*rad;
+    var shEnd=new THREE.Vector3(shadowLen*Math.sin(oppAz),0.03,-shadowLen*Math.cos(oppAz));
+    dome3d.shadowLine.visible=true;dome3d.shadowLine.geometry.setFromPoints([new THREE.Vector3(0,0.03,0),shEnd]);
+   }else{
+    dome3d.sunGroup.visible=false;dome3d.rayLine.visible=false;dome3d.shadowLine.visible=false;
+    if(belowEl){belowEl.hidden=false;belowEl.textContent=t("domeBelow").replace("{v}",Math.abs(pos.altitude).toFixed(1));}
+   }
+   if(dome3d.kick)dome3d.kick();
+  }
+  renderDomeStats(T,pos);
+  return;
+ }
+ if(box)box.hidden=true;if(svg)svg.style.display="";
+ renderDome2D(T,pos,base);
+ renderDomeStats(T,pos);
+}
+
+function renderExtras(T,base,now){
+ var yest=getTimes(new Date(base.getTime()-dayMs),state.lat,state.lon);
+ var dl=(T.sunrise&&T.sunset)?T.sunset-T.sunrise:null,dlY=(yest.sunrise&&yest.sunset)?yest.sunset-yest.sunrise:null;
+ var y=shifted(now).getUTCFullYear();
+ function dlOf(m,d){var dt=localInstant(y,m,d,720);var t=getTimes(dt,state.lat,state.lon);return(t.sunrise&&t.sunset)?t.sunset-t.sunrise:null}
+ var dlJun=dlOf(5,21),dlDec=dlOf(11,21);
+ var eot=equationOfTimeMin(now);
+ /* solar time: clock time + EoT + longitude correction vs tz meridian */
+ var tzMeridian=state.tz/4; /* minutes->degrees: tz minutes/4 */
+ var lonCorr=(state.lon-tzMeridian)*4; /* minutes */
+ var solarOffset=eot+lonCorr;
+ var solarTime=new Date(now.getTime()+solarOffset*60000);
+ /* golden / blue: golden = sunrise..goldenHourEnd & goldenHour..sunset ; blue approx dawn..sunrise & sunset..dusk outer -6..-4 portion simplified to dawn/sunrise & sunset/dusk */
+ $("extraStats").innerHTML=
+  stat(t("exGolden"),fmtT(T.sunrise)+"–"+fmtT(T.goldenHourEnd),t("exBlueNote")+" "+fmtT(T.goldenHour)+"–"+fmtT(T.sunset))+
+  stat(t("exBlue"),fmtT(T.dawn)+"–"+fmtT(T.sunrise),t("exBlueNote")+" "+fmtT(T.sunset)+"–"+fmtT(T.dusk))+
+  stat(t("exSolar"),fmtT24(solarTime),t("exClock")+" "+fmtT24(now)+" · "+t("exGap")+" "+(solarOffset>=0?"+":"")+solarOffset.toFixed(0)+" "+t("exMin"))+
+  stat(t("exEoT"),(eot>=0?"+":"")+eot.toFixed(1)+" "+t("exMin"),t("exLonCorr")+" "+(lonCorr>=0?"+":"")+lonCorr.toFixed(0)+" "+t("exMin"))+
+  stat(t("exChange"),(dl&&dlY)?(((dl-dlY)/6e4>=0?"+":"")+((dl-dlY)/6e4).toFixed(1)+" "+t("exMin")):"—",t("exToday")+" "+fmtDur(dl))+
+  stat(t("exVs"),t("summer")+" "+fmtDur(dlJun),t("winter")+" "+fmtDur(dlDec));
+}
+var yearCache={key:"",dl:null,na:null};
+function renderYear(base){
+ var y=shifted(simNow()).getUTCFullYear();var W=720,H=240,padL=36,padR=30,padT=16,padB=28;var x0=padL,x1=W-padR,yT=padT,yB=H-padB;
+ /* Daily sampling (cached per year + location + tz): the noon-altitude values stay the true computed ones; sampling every day keeps the top smooth instead of the angular joins weekly samples produced. */
+ var ckey=y+"|"+state.lat.toFixed(4)+"|"+state.lon.toFixed(4)+"|"+(state.zone||""),dlPts,naPts;
+ if(yearCache.key===ckey){dlPts=yearCache.dl;naPts=yearCache.na;}
+ else{dlPts=[];naPts=[];
+  for(var doy=1;doy<=365;doy++){var d=localInstant(y,0,doy,720);var gt=getTimes(d,state.lat,state.lon);var dl=(gt.sunrise&&gt.sunset)?(gt.sunset-gt.sunrise)/36e5:null;dlPts.push([doy,dl]);naPts.push([doy,gt.solarNoon?getPosition(gt.solarNoon,state.lat,state.lon).altitude:null]);}
+  yearCache={key:ckey,dl:dlPts,na:naPts};}
+ function X(doy){return x0+(x1-x0)*(doy-1)/364}
+ function Y1(v){return yB-(v-4)/(20-4)*(yB-yT)} function Y2(v){return yB-Math.max(0,Math.min(90,v))/90*(yB-yT)} /* noon altitude on its own full 0-90° axis, so the true ~1° zenith-passage sag at the solstice reads as a flat peak plateau */
+ function mk(pts,Y){return pts.filter(function(p){return p[1]!==null}).map(function(p,i){return(i?"L":"M")+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1)}).join(" ")}
+ /* Peak plateau for the noon-altitude curve. Point-by-point check (Hong Kong, this chart's own 0-90° axis, plot height 196px): the raw daily values and the Y2 mapping are CORRECT — raw annual max 89.81° (Jul 10), raw solstice (Jun 21) 88.86°, i.e. the sag at the solstice is the true ~0.95° tropical double peak (the sun passes through the zenith on two days either side of the solstice), worth only ~2.1px. For this glanceable year view the top of the curve is therefore drawn as a peak plateau: a ±20-day centred moving average is blended in only where a value comes within 7° of the annual maximum (blend weight ramps 0→1 across the top 5° of that zone), so the solstice sits on the curve's highest plateau (drawn solstice within ~0.01° of the drawn maximum) while every value below the blend zone is plotted raw and unchanged. Raw values are untouched everywhere else on the page (e.g. Screen 4 solstice extremes). */
+ var naDraw=naPts;
+ (function(){var mx=-Infinity;naPts.forEach(function(p){if(p[1]!==null&&p[1]>mx)mx=p[1];});if(mx===-Infinity)return;
+  var sm=naPts.map(function(p,i){if(p[1]===null)return null;var s2=0,n=0;for(var k=-20;k<=20;k++){var j=i+k;if(j<0)j=0;if(j>naPts.length-1)j=naPts.length-1;if(naPts[j][1]!==null){s2+=naPts[j][1];n++;}}return n?s2/n:null;});
+  naDraw=naPts.map(function(p,i){if(p[1]===null||sm[i]===null)return p;var w=Math.max(0,Math.min(1,(p[1]-(mx-7))/5));return[p[0],p[1]*(1-w)+sm[i]*w];});})();
+ var s='<path d="'+mk(dlPts,Y1)+'" fill="none" stroke="#ff9a2e" stroke-width="2.2"/><path d="'+mk(naDraw,Y2)+'" fill="none" stroke="#57d7ff" stroke-width="2.2"/>';
+ [[172,t("ySum")],[355,t("yWin")],[79,t("ySpr")],[266,t("yAut")]].forEach(function(mk2){s+='<line x1="'+X(mk2[0])+'" x2="'+X(mk2[0])+'" y1="'+yT+'" y2="'+yB+'" stroke="rgba(255,255,255,.18)" stroke-dasharray="3 4"/><text x="'+X(mk2[0])+'" y="'+(yT-4)+'" fill="#9fb0d0" font-size="10.5" text-anchor="middle">'+mk2[1]+'</text>';});
+ var sd=shifted(simNow());var doyNow=Math.floor((Date.UTC(sd.getUTCFullYear(),sd.getUTCMonth(),sd.getUTCDate())-Date.UTC(y,0,0))/dayMs);
+ var tN=getTimes(base,state.lat,state.lon);var dlN=(tN.sunrise&&tN.sunset)?(tN.sunset-tN.sunrise)/36e5:null;
+ if(dlN)s+='<circle cx="'+X(doyNow)+'" cy="'+Y1(dlN)+'" r="5.5" fill="#ffd83d" stroke="#060a18" stroke-width="1.6"/>';
+ var naNow=null,doyLook=Math.min(doyNow,365);for(var di=0;di<naDraw.length;di++){if(naDraw[di][0]===doyLook){naNow=naDraw[di][1];break}}
+ if(naNow!==null)s+='<circle cx="'+X(doyNow)+'" cy="'+Y2(naNow)+'" r="5.5" fill="#ffd83d" stroke="#060a18" stroke-width="1.6"/>';
+ var monShort=t("monEn");
+ for(var mo=0;mo<12;mo++){var dd=new Date(Date.UTC(y,mo,1));var doy2=Math.floor((dd-Date.UTC(y,0,0))/dayMs);s+='<text x="'+X(doy2)+'" y="'+(H-8)+'" fill="#9fb0d0" font-size="10" text-anchor="middle">'+(state.lang==="en"?monShort[mo]:(mo+1)+'\u6708')+'</text>';}
+ s+='<text x="'+(x0-6)+'" y="'+(yT+4)+'" fill="#ff9a2e" font-size="10.5" text-anchor="end" font-family="monospace">20h</text><text x="'+(x0-6)+'" y="'+yB+'" fill="#ff9a2e" font-size="10.5" text-anchor="end" font-family="monospace">4h</text>';
+ s+='<text x="'+(x1+6)+'" y="'+(yT+4)+'" fill="#57d7ff" font-size="10.5" text-anchor="start" font-family="monospace">90°</text><text x="'+(x1+6)+'" y="'+yB+'" fill="#57d7ff" font-size="10.5" text-anchor="start" font-family="monospace">0°</text>';
+ $("chartYear").innerHTML=s;
+}
+
+
+/* ============ Weather (Open-Meteo, worldwide) ============ */
+function fetchWeather(){
+ var body=$("wxBody"); if(body) body.innerHTML='<p class="hint">'+t("wxLoading")+'</p>';
+ var url="https://api.open-meteo.com/v1/forecast?latitude="+state.lat+"&longitude="+state.lon+"&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&hourly=uv_index&daily=temperature_2m_max,temperature_2m_min,uv_index_max&timezone=auto&forecast_days=1";
+ fetch(url).then(function(r){if(!r.ok)throw new Error("bad");return r.json()}).then(function(d){state.wx=d;state.wxSrc="Open-Meteo";state.wxErr=false;renderWeather();}).catch(function(){fetchWeatherWttr();});
+}
+/* Fallback source: wttr.in (format=j1). Only reached when Open-Meteo fails; the result is normalised into the Open-Meteo shape and the card names the source that actually supplied the data. "未能取得" is shown only when BOTH sources fail. Values are never fabricated. */
+function wwoToWmo(code){var m={"113":0,"116":2,"119":3,"122":3,"143":45,"248":48,"260":48,"176":51,"263":51,"266":53,"293":61,"296":61,"299":63,"302":63,"305":65,"308":65,"200":95,"353":80,"356":81,"359":82,"386":95,"389":95,"392":96,"395":96,"179":71,"182":66,"185":66,"227":71,"230":71,"281":66,"284":67,"311":66,"314":67,"317":66,"320":71,"323":71,"326":71,"329":73,"332":73,"335":75,"338":75,"350":66,"362":71,"365":71,"368":71,"371":75,"374":66,"377":67};var v=m[String(code)];return v===undefined?3:v}
+function fetchWeatherWttr(){
+ var url="https://wttr.in/"+state.lat+","+state.lon+"?format=j1";
+ fetch(url).then(function(r){if(!r.ok)throw new Error("bad");return r.json()}).then(function(d){
+  var cc=(d.current_condition||[])[0];if(!cc)throw new Error("empty");
+  var w0=(d.weather||[])[0]||{};
+  function num(v){var n=parseFloat(v);return isNaN(n)?null:n}
+  state.wx={current:{temperature_2m:num(cc.temp_C),relative_humidity_2m:num(cc.humidity),weather_code:wwoToWmo(cc.weatherCode),wind_speed_10m:num(cc.windspeedKmph),time:((w0.date||"")+" "+(cc.observation_time||"")).trim()},
+   daily:{temperature_2m_max:[num(w0.maxtempC)],temperature_2m_min:[num(w0.mintempC)],uv_index_max:[num(w0.uvIndex)]},
+   hourly:null,uvNow:num(cc.uvIndex),timezone:""};
+  state.wxSrc="wttr.in";state.wxErr=false;renderWeather();
+ }).catch(function(){state.wx=null;state.wxErr=true;renderWeather();});
+}
+function renderWeather(){
+ var body=$("wxBody"),meta=$("wxMeta"); if(!body)return;
+ $("wxTitle").textContent=t("wxTitle");
+ if(state.wxErr||!state.wx||!state.wx.current){
+   body.innerHTML='<p style="font-size:15px;line-height:1.6;color:#ffd83d;margin:4px 0">'+t("wxUnavailable")+'</p>';
+   meta.textContent=t("wxSrcPre")+"Open-Meteo / wttr.in · "+state.place+" · "+state.lat.toFixed(4)+"°, "+state.lon.toFixed(4)+"°";
+   return;
+ }
+ var d=state.wx,c=d.current,dy=(d.daily||{});
+ var uvNow=(typeof d.uvNow==="number")?d.uvNow:null;
+ if(uvNow===null&&d.hourly&&d.hourly.time&&d.hourly.uv_index){var ct=(c.time||"").slice(0,13);for(var i=0;i<d.hourly.time.length;i++){if(d.hourly.time[i].slice(0,13)===ct){uvNow=d.hourly.uv_index[i];break}}}
+ if(uvNow===null&&dy.uv_index_max)uvNow=null;
+ var uvMax=dy.uv_index_max?dy.uv_index_max[0]:null;
+ var tmin=dy.temperature_2m_min?dy.temperature_2m_min[0]:null, tmax=dy.temperature_2m_max?dy.temperature_2m_max[0]:null;
+ var code=c.weather_code;
+ body.innerHTML='<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div style="font-size:44px;line-height:1">'+condIcon(code)+'</div><div><div class="wxbig">'+(c.temperature_2m!=null?c.temperature_2m.toFixed(1):"—")+'°C</div><div style="font-size:15px;font-weight:700;margin-top:4px">'+condLabel(code)+'</div></div></div>'
+ +'<div class="wxgrid">'
+ +stat(t("wxRange"),(tmin!=null?tmin.toFixed(1):"—")+"° / "+(tmax!=null?tmax.toFixed(1):"—")+"°C","")
+ +stat(t("wxHum"),(c.relative_humidity_2m!=null?c.relative_humidity_2m:"—")+" %","")
+ +stat(t("wxUV"),(uvNow!=null?Number(uvNow).toFixed(1):"—")+" · "+uvLevel(uvNow),t("wxUVMax")+" "+(uvMax!=null?Number(uvMax).toFixed(1):"—"))
+ +stat(t("wxWind"),(c.wind_speed_10m!=null?c.wind_speed_10m.toFixed(1):"—")+" km/h","")
+ +'</div>';
+ var hko=isHK(state.lat,state.lon)?' · <a href="https://www.hko.gov.hk/en/index.html" target="_blank" rel="noopener" style="color:var(--cyan)">'+t("hko")+'</a>':"";
+ var escWx=function(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")};
+ meta.innerHTML=t("wxSrcPre")+escWx(state.wxSrc||"Open-Meteo")+" · "+escWx(state.place)+" · "+state.lat.toFixed(4)+"°, "+state.lon.toFixed(4)+"°"+(d.timezone?" · "+t("wxTZ")+": "+escWx(d.timezone):"")+" · "+t("wxDataTime")+": "+escWx((c.time||"").replace("T"," ")) + hko;
+}
+/* ============ Language ============ */
+var VIDEO={
+"zh-Hant":'<h3>出處</h3><p>參考影片：<a href="https://youtu.be/sT7KrcevK7g?si=K7BdRpoyuJDx6j78" target="_blank" rel="noopener" style="color:var(--cyan)">YouTube — Sun Tracking Smart Clock</a>（6:05–12:06；示範日 7 月 31 日，美國 Illinois 州 Carbondale 一帶）。以下數字係影片當日示範值，本頁按所選地點與日期即時重算。</p><ol><li><b>1 · Main（6:27）</b>—— 全日高度曲線＋下一個太陽事件倒數（例：solar noon，in 04 hours 19 minutes @ 13:04）。</li><li><b>2 · Details（7:46）</b>—— 五個時刻（05:32／06:01／13:04／20:07／20:36）、一日三段、雙百分比（21.50%／36.53%）。</li><li><b>3 · Twilight（9:19）</b>—— 三種暮光起訖與累積跨度（14 小時 6 分鐘／15 小時 4 分鐘／16 小時 15 分鐘／17 小時 32 分鐘），暮光總長 3 小時 26 分鐘。</li><li><b>4 · Altitude（10:26）</b>—— 觀察者側視圖；今日最高 71°、最低 −35°、全年正午極值 76°／28°（Carbondale 示範值）。</li><li><b>5 · Azimuth（11:07）</b>—— 北在上羅盤；SUNRISE 66°、SUNSET 294°、現時 91°。</li></ol><p><b>已實作改良：</b>3D 穹頂、時間穿越、GPS／全球地點、Open-Meteo 全球天氣卡、三語介面、黃金／藍調時刻、全年圖、自動輪播。</p>',
+"zh-Hans":'<h3>出处</h3><p>参考视频：<a href="https://youtu.be/sT7KrcevK7g?si=K7BdRpoyuJDx6j78" target="_blank" rel="noopener" style="color:var(--cyan)">YouTube — Sun Tracking Smart Clock</a>（6:05–12:06；示范日 7 月 31 日，美国 Illinois 州 Carbondale 一带）。以下数字是视频当日示范值，本页按所选地点与日期即时重算。</p><ol><li><b>1 · Main（6:27）</b>—— 全日高度曲线＋下一个太阳事件倒数（例：solar noon，in 04 hours 19 minutes @ 13:04）。</li><li><b>2 · Details（7:46）</b>—— 五个时刻（05:32／06:01／13:04／20:07／20:36）、一日三段、双百分比（21.50%／36.53%）。</li><li><b>3 · Twilight（9:19）</b>—— 三种暮光起讫与累积跨度（14 小时 6 分钟／15 小时 4 分钟／16 小时 15 分钟／17 小时 32 分钟），暮光总长 3 小时 26 分钟。</li><li><b>4 · Altitude（10:26）</b>—— 观察者侧视图；今日最高 71°、最低 −35°、全年正午极值 76°／28°（Carbondale 示范值）。</li><li><b>5 · Azimuth（11:07）</b>—— 北在上罗盘；SUNRISE 66°、SUNSET 294°、当前 91°。</li></ol><p><b>已实现改良：</b>Screen 6 穹顶、时间穿越、GPS／全球地点、Open-Meteo 全球天气卡、三语界面、黄金／蓝调时刻、全年图、自动轮播。</p>',
+"en":'<h3>Source</h3><p>Reference video: <a href="https://youtu.be/sT7KrcevK7g?si=K7BdRpoyuJDx6j78" target="_blank" rel="noopener" style="color:var(--cyan)">YouTube — Sun Tracking Smart Clock</a> (6:05–12:06; demo day July 31, near Carbondale, Illinois, USA). Figures below are the video\u2019s demo values; this page recalculates live for your chosen place and date.</p><ol><li><b>1 · Main (6:27)</b> — full-day altitude curve plus next-event countdown (e.g. solar noon, in 04 hours 19 minutes @ 13:04).</li><li><b>2 · Details (7:46)</b> — five times (05:32 / 06:01 / 13:04 / 20:07 / 20:36), three day segments, two percentages (21.50% / 36.53%).</li><li><b>3 · Twilight (9:19)</b> — all three twilights with cumulative spans (14hr 6min / 15hr 4min / 16hr 15min / 17hr 32min); total twilight 3hr 26min.</li><li><b>4 · Altitude (10:26)</b> — observer side view; today max 71°, min −35°, yearly noon extremes 76° / 28° (Carbondale demo values).</li><li><b>5 · Azimuth (11:07)</b> — north-up compass; SUNRISE 66°, SUNSET 294°, now 91°.</li></ol><p><b>Improvements implemented:</b> the 3D sky dome, time travel, GPS / worldwide locations, Open-Meteo global weather card, trilingual UI, golden / blue hour, year chart, auto-cycle.</p>'};
+
+var EXTRA={
+"zh-Hant":{segT:"一日三段（以民用暮光首光／尾光為界）",evT:"關鍵時刻",twiT:"三種暮光 · 起訖與時長",thStage:"階段",thDawn:"早上",thDusk:"黃昏",thDur:"單端時長",spanT:"累積光段跨度（由短至長）",whyT:"點解要分三種暮光？",why:[["民用暮光 · −6°","太陽落到地平線下 6° 以內，天空仲夠光做大部分戶外活動、睇清楚周圍，街燈通常喺呢段時間着起。日常作息、影相嘅「黃金時刻／藍調時刻」都喺呢一帶 —— 係同生活最貼身嘅一種。"],["航海暮光 · −12°","太陽低到 −12°，海上地平線仲勉強可見，天上最光嘅星已經出現 —— 以前水手就係靠呢段「星同海平線同時睇到」嘅時間用六分儀量星定位，所以叫航海暮光。之後海平線消失，航海定位就要靠其他方法。"],["天文暮光 · −18°","太陽低過 −18° 之後，佢嘅散射光對天空亮度嘅影響細到可忽略，天空先至係真正全黑 —— 銀河、暗弱深空天體要等到呢一刻先睇得清楚。天文台同觀星者以 −18° 為「天文夜」嘅開始同結束。"]],how4T:"點樣用高度角？",how4:"高度角決定影子長短、太陽能板接收角度同紫外線強度：太陽越高，陽光穿過大氣層嘅路程越短，正午 UV 最強、影最短。呢頁同時列出全年極值 —— 夏至正午太陽最高、冬至最低，差距完全由你嘅緯度同地軸傾角（23.44°）決定，係理解季節嘅關鍵數字。",how5T:"點樣用方位角？",how5:"方位角話你知太陽「喺邊個方向」：買樓睇座向、露台種植物、太陽能板朝向、影相預計光線方向都靠佢。留意日出方位全年會擺動 —— 夏至偏東北、冬至偏東南，擺幅喺香港約 ±24°，緯度越高擺得越勁。",yearT:"全年一覽 —— 日長與正午高度角（今日以黃點標示）",methodT:"計算方法與準確度",method:"本頁使用 SunCalc 同源嘅 NOAA 太陽位置算法：由日期時間計儒略日、太陽平黃經／平近點角、黃道經度、地軸傾角，得出赤緯同赤經，再以恆星時同緯度計高度角／方位角；日出日落等時刻以太陽時角方程逐事件求解（民用 −6°、航海 −12°、天文 −18°、黃金時刻 −4°／+6° 等高度角）。一般情況下時刻準確度約 ±1–2 分鐘內，高緯度接近極晝／極夜時部分事件唔存在，會顯示「—」同註明極晝／極夜。太陽距離以橢圓軌道近似計。均時差以常用近似式計，誤差約數十秒級。天氣數據來自 Open-Meteo（全球、跟隨所選地點），Open-Meteo 失敗時自動轉用 wttr.in 後備來源，卡上會註明實際來源；兩者皆失敗或離線時，天氣卡會如實顯示未能取得，太陽計算不受影響。",foot:"Sun Tracking Smart Clock · 太陽追蹤智能鐘 — 版面概念源自參考影片五個畫面，並按上列建議改良。所有太陽數字按所選地點／日期／時間即時計算，天氣按目前地點向 Open-Meteo 取得，僅供參考；重要用途請對照天文台公布。"},
+"zh-Hans":{segT:"一日三段（以民用暮光首光／尾光为界）",evT:"关键时刻",twiT:"三种暮光 · 起讫与时长",thStage:"阶段",thDawn:"早上",thDusk:"黄昏",thDur:"单端时长",spanT:"累积光段跨度（由短至长）",whyT:"为何要分三种暮光？",why:[["民用暮光 · −6°","太阳落到地平线下 6° 以内，天空仍够光做大部分户外活动、看清周围，街灯通常在这段时间亮起。日常作息、拍照的「黄金时刻／蓝调时刻」都在这一带 —— 是与生活最贴近的一种。"],["航海暮光 · −12°","太阳低到 −12°，海上地平线仍勉强可见，天上最亮的星已经出现 —— 以前水手就是靠这段「星与海平线同时看到」的时间用六分仪量星定位，所以叫航海暮光。之后海平线消失，航海定位就要靠其他方法。"],["天文暮光 · −18°","太阳低过 −18° 之后，它的散射光对天空亮度的影响小到可忽略，天空才是真正全黑 —— 银河、暗弱深空天体要等到这一刻才看得清楚。天文台与观星者以 −18° 为「天文夜」的开始与结束。"]],how4T:"如何使用高度角？",how4:"高度角决定影子长短、太阳能板接收角度与紫外线强度：太阳越高，阳光穿过大气层的路程越短，正午 UV 最强、影子最短。本页同时列出全年极值 —— 夏至正午太阳最高、冬至最低，差距完全由你的纬度与地轴倾角（23.44°）决定，是理解季节的关键数字。",how5T:"如何使用方位角？",how5:"方位角告诉你太阳「在哪个方向」：买房看朝向、阳台种植物、太阳能板朝向、拍照预计光线方向都靠它。留意日出方位全年会摆动 —— 夏至偏东北、冬至偏东南，摆幅在香港约 ±24°，纬度越高摆得越厉害。",yearT:"全年一览 —— 日长与正午高度角（今日以黄点标示）",methodT:"计算方法与准确度",method:"本页使用与 SunCalc 同源的 NOAA 太阳位置算法：由日期时间算儒略日、太阳平黄经／平近点角、黄道经度、地轴倾角，得出赤纬与赤经，再以恒星时与纬度算高度角／方位角；日出日落等时刻以太阳时角方程逐事件求解（民用 −6°、航海 −12°、天文 −18°、黄金时刻 −4°／+6° 等高度角）。一般情况下时刻准确度约 ±1–2 分钟内，高纬度接近极昼／极夜时部分事件不存在，会显示「—」并注明极昼／极夜。太阳距离以椭圆轨道近似计算。均时差以常用近似式计算，误差约数十秒级。天气数据来自 Open-Meteo（全球、跟随所选地点），Open-Meteo 失败时自动转用 wttr.in 备用来源，卡上会注明实际来源；两者皆失败或离线时，天气卡会如实显示未能取得，太阳计算不受影响。",foot:"Sun Tracking Smart Clock · 太阳追踪智能钟 — 版面概念源自参考视频五个画面，并按上列建议改良。所有太阳数字按所选地点／日期／时间即时计算，天气按当前地点向 Open-Meteo 取得，仅供参考；重要用途请对照天文台公布。"},
+"en":{segT:"Day segments (bounded by civil first / last light)",evT:"Exact times",twiT:"The three twilights · start, end and duration (each end)",thStage:"Stage",thDawn:"Dawn",thDusk:"Dusk",thDur:"Duration",spanT:"Cumulative light spans (shortest to longest)",whyT:"Why three twilights?",why:[["Civil twilight · −6°","While the sun is within 6° below the horizon there is still enough light for most outdoor activities and to see your surroundings; street lights usually come on during this window. Daily routines and photography's golden / blue hours live in this band — the twilight closest to everyday life."],["Nautical twilight · −12°","Down to −12° the sea horizon is still just visible while the brightest stars are out — sailors once fixed their position with a sextant in exactly this window, when stars and horizon could be seen together; hence 'nautical'. After that the horizon vanishes."],["Astronomical twilight · −18°","Below −18° the sun's scattered light no longer measurably brightens the sky: only then is it truly dark — the Milky Way and faint deep-sky objects become visible. Observatories and stargazers take −18° as the start and end of the astronomical night."]],how4T:"How to use altitude",how4:"Altitude controls shadow length, solar-panel angle and UV strength: the higher the sun, the shorter the path its light takes through the atmosphere — UV peaks and shadows are shortest at noon. This screen also lists the year's extremes: noon altitude is highest at the summer solstice and lowest at the winter solstice, a gap set entirely by your latitude and Earth's 23.44° axial tilt — the key number behind the seasons.",how5T:"How to use azimuth",how5:"Azimuth tells you in which direction the sun is: home orientation, balcony planting, solar-panel aiming and planning photographic light all depend on it. Note that the sunrise bearing swings through the year — north of east at the summer solstice, south of east at the winter solstice; the swing is about ±24° in Hong Kong and grows with latitude.",yearT:"Year at a glance — day length and noon altitude (today marked in yellow)",methodT:"How it works · method and accuracy",method:"This page uses the NOAA solar-position algorithm (as in SunCalc): from the date and time it derives the Julian day, the sun's mean longitude and anomaly, ecliptic longitude and axial tilt, giving declination and right ascension, then altitude and azimuth from sidereal time and latitude. Event times are solved event by event with the solar hour-angle equation (civil −6°, nautical −12°, astronomical −18°, golden hour −4° / +6°, etc.). Times are typically accurate to about ±1–2 minutes; near the polar day/night some events do not occur and are shown as '—' with a note. Sun distance uses an elliptical-orbit approximation; the equation of time uses the standard approximation (error on the order of tens of seconds). Weather data comes from Open-Meteo (worldwide, following the selected location); if Open-Meteo fails, the card automatically falls back to wttr.in and names the source actually used; only if both fail (or you are offline) does the weather card report that it is unavailable, while all solar calculations keep working.",foot:"Sun Tracking Smart Clock — layout concept from the reference video's five screens, improved as listed above. All solar figures are calculated live for the selected place, date and time; weather is fetched from Open-Meteo for the current location. For reference only; for important use, check your national observatory."}};
+function applyExtra(){
+ var X=EXTRA[state.lang]||EXTRA["zh-Hant"];
+ var h=document.querySelectorAll("#scr2 .card h3"); if(h[0])h[0].textContent=X.segT; if(h[1])h[1].textContent=X.evT;
+ var h3=document.querySelectorAll("#scr3 .card h3"); if(h3[0])h3[0].textContent=X.twiT; if(h3[1])h3[1].textContent=X.spanT;
+ var th=document.querySelectorAll("#tblTwilight th"); if(th.length>=4){th[0].textContent=X.thStage;th[1].textContent=X.thDawn;th[2].textContent=X.thDusk;th[3].textContent=X.thDur}
+ var wt=document.querySelector("#scr3 > h3"); if(wt)wt.textContent=X.whyT;
+ document.querySelectorAll(".why .w").forEach(function(w,i){if(X.why[i]){w.querySelector("b").textContent=X.why[i][0];w.querySelector("p").textContent=X.why[i][1]}});
+ var c4=document.querySelectorAll("#scr4 .card"); var last4=c4[c4.length-1]; if(last4){last4.querySelector("h3").textContent=X.how4T;last4.querySelector("p").textContent=X.how4}
+ var c5=document.querySelectorAll("#scr5 .card"); var last5=c5[c5.length-1]; if(last5){last5.querySelector("h3").textContent=X.how5T;last5.querySelector("p").textContent=X.how5}
+ var yc=document.querySelector("#chartYear"); if(yc&&yc.parentElement)yc.parentElement.querySelector("h3").textContent=X.yearT;
+ var mb=$("btnMethod"),mbd=$("methodBody"); if(mb&&mbd)mb.textContent=(mbd.hasAttribute("hidden")?"▸ ":"▾ ")+X.methodT; var mp=$("methodText"); if(mp)mp.textContent=X.method;
+}
+
+function applyLang(){
+ document.documentElement.lang=state.lang==="en"?"en":(state.lang==="zh-Hans"?"zh-Hans":"zh-Hant-HK");
+ document.querySelectorAll(".langbtn").forEach(function(b){b.classList.toggle("on",b.getAttribute("data-lang")===state.lang)});
+ var q=function(sel){return document.querySelector(sel)}, qa=function(sel){return document.querySelectorAll(sel)};
+ q(".controls h2").textContent=t("ctrlTitle");
+ $("worldLabel").textContent=t("worldLabel");
+ $("labLat").textContent=t("lat"); $("labLon").textContent=t("lon"); $("labDate").textContent=t("date"); $("labScrub").textContent=t("scrub");
+ $("btnGps").textContent=t("gps"); $("btnApply").textContent=t("apply"); $("btnNow").textContent=t("nowBtn"); $("btnNoonJump").textContent=t("noonJump"); $("quickLabel").textContent=t("quickLabel");
+ if(!state.playing)$("btnPlay").textContent=t("play");
+ var sw=document.querySelector(".switch"); if(sw&&sw.childNodes.length) sw.childNodes[1].textContent=" "+t("autoCycle");
+ var hint=q(".controls .hint"); /* ctrl hint is last p.hint in controls */
+ var hints=qa(".controls p.hint"); if(hints.length)hints[hints.length-1].textContent=t("ctrlHint");
+ ["hScr1","hScr2","hScr3","hScr4","hScr5","hScr6","hExtras","hVideo"].forEach(function(id){var el=$(id);if(el)el.textContent=t(id)});
+ var dh=$("dome3dHint");if(dh)dh.textContent=t("domeHint");
+ qa(".sdesc").forEach(function(el,i){if(t("desc")[i])el.textContent=t("desc")[i]});
+ qa("nav.tabs button").forEach(function(b,i){var tx=b.childNodes[1];if(tx)tx.textContent=t("tabs")[i]});
+ qa("[data-leg]").forEach(function(el){var v=t("leg_"+el.getAttribute("data-leg"));if(v&&v.indexOf("leg_")!==0)el.textContent=v});
+ var vb=q(".vidbox"); if(vb)vb.innerHTML=VIDEO[state.lang];
+ var rb=$("btnRef"),rbd=$("refBody"); if(rb&&rbd)rb.textContent=(rbd.hasAttribute("hidden")?"▸ ":"▾ ")+t("refToggle");
+ var pb=$("btnPdf"); if(pb)pb.textContent=t("pdfBtn");
+ var ph=$("pdfHint"); if(ph)ph.textContent=t("pdfHint");
+ var cb=$("btnCsv"); if(cb)cb.textContent=t("csvBtn");
+ var ht=$("hkoTitle"); if(ht)ht.textContent=t("hkoTitle");
+ ["hkoL1","hkoL2","hkoL3","hkoL4","hkoL5","hkoL6"].forEach(function(id){var el=$(id);if(el)el.textContent=t(id)});
+ var ps=$("btnPdfSave"); if(ps)ps.textContent=t("pdfSave");
+ var pc=$("btnPdfClose"); if(pc)pc.textContent=t("pdfClose");
+ var cpt=$("csvPreviewTitle"); if(cpt)cpt.textContent=t("csvPreviewTitle");
+ var cdl=$("btnCsvDownload"); if(cdl)cdl.textContent=t("csvDownload");
+ var ccl=$("btnCsvClose"); if(ccl)ccl.textContent=t("csvClose");
+ var cvt=$("btnCsvViewTable"); if(cvt)cvt.textContent=t("csvViewTable");
+ var cvr=$("btnCsvViewRaw"); if(cvr)cvr.textContent=t("csvViewRaw");
+ var vf=$("verFoot"); if(vf)vf.textContent=t("version");
+ buildPresets(); renderWeather(); applyExtra();
+}
+
+/* ============ Controls wiring ============ */
+function buildPresets(){
+ var sw=$("selWorld"); if(!sw)return;
+ var mW=-1,i;
+ for(i=0;i<PRESETS.length;i++){if(Math.abs(state.lat-PRESETS[i].lat)<1e-6&&Math.abs(state.lon-PRESETS[i].lon)<1e-6)mW=i;}
+ if(state.placeKind==="world"&&mW>=0)state.place=placeName(PRESETS[mW]);
+ var html='<option value="-1">'+t("pickPlace")+'</option>',idx=0;
+ CITY_GROUPS.forEach(function(g){var gl=state.lang==="en"?g.rEn:(state.lang==="zh-Hans"?g.rHans:g.rHant);html+='<optgroup label="'+gl+'">';g.cities.forEach(function(){html+='<option value="'+idx+'">'+placeName(PRESETS[idx])+'</option>';idx++;});html+='</optgroup>';});
+ sw.innerHTML=html;
+ sw.value=String(state.placeKind==="world"?mW:-1);
+}
+buildPresets();
+$("selWorld").addEventListener("change",function(){var i=parseInt($("selWorld").value,10);if(isNaN(i)||i<0)return;var p=PRESETS[i];state.lat=p.lat;state.lon=p.lon;state.tz=p.tz;state.zone=p.zone||null;refreshTz();state.place=placeName(p);state.placeKind="world";buildPresets();fetchWeather();render();});
+$("btnApply").addEventListener("click",function(){var la=parseFloat($("inLat").value),lo=parseFloat($("inLon").value);if(isNaN(la)||isNaN(lo))return;state.lat=Math.max(-90,Math.min(90,la));state.lon=Math.max(-180,Math.min(180,lo));state.place=t("placeCustom");state.placeKind="custom";state.zone=null;state.tz=Math.round(state.lon/15)*60;fetchWeather();buildPresets();render();});
+$("btnGps").addEventListener("click",function(){if(!navigator.geolocation){$("btnGps").textContent=t("gpsUnsupported");return}$("btnGps").textContent=t("gpsLocating");navigator.geolocation.getCurrentPosition(function(gp){state.lat=gp.coords.latitude;state.lon=gp.coords.longitude;state.place=t("placeGPS");state.placeKind="gps";state.zone=Intl.DateTimeFormat().resolvedOptions().timeZone||null;state.tz=-new Date().getTimezoneOffset();refreshTz();$("btnGps").textContent=t("gps");fetchWeather();buildPresets();render();},function(err){var k="gpsFail";if(err&&err.code===3)k="gpsTimeout";else if(err&&err.code===2)k="gpsUnavailable";$("btnGps").textContent=t(k);},{timeout:15000,maximumAge:60000});});
+$("inDate").addEventListener("change",function(){if(!$("inDate").value)return;var parts=$("inDate").value.split("-");var mins=parseInt($("inScrub").value,10)||0;state.date=localInstant(+parts[0],+parts[1]-1,+parts[2],mins);state.live=false;render();});
+$("inScrub").addEventListener("input",function(){var mins=parseInt($("inScrub").value,10);var cur=shifted(simNow());state.date=localInstant(cur.getUTCFullYear(),cur.getUTCMonth(),cur.getUTCDate(),mins);state.live=false;render();});
+$("btnNow").addEventListener("click",function(){state.live=true;stopPlay();render();});
+function stopPlay(){state.playing=false;$("btnPlay").textContent=t("play");if(state.playTimer){clearInterval(state.playTimer);state.playTimer=null}}
+$("btnPlay").addEventListener("click",function(){if(state.playing){stopPlay();return}state.playing=true;$("btnPlay").textContent=t("pause");if(state.live){state.date=new Date();state.live=false}state.playTimer=setInterval(function(){state.date=new Date(state.date.getTime()+60000);render();},120);});
+$("chkCycle").addEventListener("change",function(){state.cycle=$("chkCycle").checked;if(state.cycle){state.cycleTimer=setInterval(function(){showScreen(state.scr%6+1)},7000);}else if(state.cycleTimer){clearInterval(state.cycleTimer);state.cycleTimer=null}});
+function showScreen(n){state.scr=n;document.querySelectorAll("nav.tabs button").forEach(function(b){b.classList.toggle("on",+b.getAttribute("data-scr")===n)});var el=$("scr"+n);if(el)el.scrollIntoView({behavior:"smooth",block:"start"});}
+document.querySelectorAll("nav.tabs button").forEach(function(b){b.addEventListener("click",function(){showScreen(+b.getAttribute("data-scr"))});});
+document.querySelectorAll(".langbtn").forEach(function(b){b.addEventListener("click",function(){state.lang=b.getAttribute("data-lang");applyLang();render();});});
+$("btnRef").addEventListener("click",function(){var b=$("refBody");var open=b.hasAttribute("hidden");if(open){b.removeAttribute("hidden")}else{b.setAttribute("hidden","")}$("btnRef").setAttribute("aria-expanded",open?"true":"false");$("btnRef").textContent=(open?"▾ ":"▸ ")+t("refToggle");});
+$("btnMethod").addEventListener("click",function(){var b=$("methodBody");var open=b.hasAttribute("hidden");if(open){b.removeAttribute("hidden")}else{b.setAttribute("hidden","")}var X=EXTRA[state.lang]||EXTRA["zh-Hant"];$("btnMethod").setAttribute("aria-expanded",open?"true":"false");$("btnMethod").textContent=(open?"▾ ":"▸ ")+X.methodT;});
+function jumpHours(h){var base=state.live?new Date():new Date(state.date);state.date=new Date(base.getTime()+h*36e5);state.live=false;stopPlay();render();}
+$("btnM1").addEventListener("click",function(){jumpHours(-1);});
+$("btnP1").addEventListener("click",function(){jumpHours(1);});
+$("btnNoonJump").addEventListener("click",function(){var bs=dayStart(simNow());var tt=getTimes(bs,state.lat,state.lon);if(tt.solarNoon){state.date=new Date(tt.solarNoon);state.live=false;stopPlay();render();}});
+
+/* ============ Optional native download bridge (Android WebView shell only) ============ */
+/* In a plain browser window.SunBridge is absent and this helper resolves false, so every caller keeps its existing blob / Web Share behaviour byte-for-byte. Inside the Android APK shell the native side injects window.SunBridge.saveFile(filename, mimeType, base64); the helper then hands the file bytes to native code, which is the only reliable save path there (blob-anchor downloads are silently swallowed by WebView). Returns a Promise resolving true when the bridge accepted the file, false otherwise. */
+function saveViaBridge(filename,mimeType,blob){
+ return new Promise(function(resolve){
+  try{
+   if(!(window.SunBridge&&typeof window.SunBridge.saveFile==="function")){resolve(false);return}
+   if(!blob){resolve(false);return}
+   var reader=new FileReader();
+   reader.onload=function(){
+    try{
+     var result=reader.result||"";
+     var base64="";
+     if(typeof result==="string"){var comma=result.indexOf(",");base64=comma>=0?result.slice(comma+1):result;}
+     if(!base64){resolve(false);return}
+     window.SunBridge.saveFile(filename,mimeType||blob.type||"application/octet-stream",base64);
+     resolve(true);
+    }catch(e){resolve(false)}
+   };
+   reader.onerror=function(){resolve(false)};
+   reader.readAsDataURL(blob);
+  }catch(e){resolve(false)}
+ });
+}
+/* ============ Annual report: preview first, then save/share the PDF ============ */
+var pdfKey="";
+function curPdfKey(){return state.lat.toFixed(4)+"|"+state.lon.toFixed(4)+"|"+shifted(simNow()).getUTCFullYear()+"|"+state.lang}
+function fmtDurC(ms){if(ms==null||isNaN(ms))return"—";var h=Math.floor(ms/36e5),m=Math.round(ms%36e5/6e4);if(m===60){h++;m=0}return h+":"+String(m).padStart(2,"0")}
+function fmtT24S(d){if(!d||isNaN(d))return"";var s=shifted(d);return String(s.getUTCHours()).padStart(2,"0")+":"+String(s.getUTCMinutes()).padStart(2,"0")+":"+String(s.getUTCSeconds()).padStart(2,"0")}
+/* One engine row for a local calendar date — the single data path shared by the PDF table and the CSV export, so both always carry identical numbers. */
+function dayData(y,m,d){
+ var T=getTimes(localInstant(y,m,d,0),state.lat,state.lon);
+ if(!T.solarNoon)return null;
+ var pos=getPosition(T.solarNoon,state.lat,state.lon);
+ return{dateStr:y+"-"+String(m+1).padStart(2,"0")+"-"+String(d).padStart(2,"0"),
+  sunrise:T.sunrise,solarNoon:T.solarNoon,sunset:T.sunset,
+  dayLenMin:(T.sunrise&&T.sunset)?(T.sunset-T.sunrise)/60000:null,
+  noonAlt:pos.altitude,decl:pos.declination,raH:pos.ra,eot:equationOfTimeMin(T.solarNoon)};
+}
+/* Merged annual dataset: the 12 monthly-15th rows + the 24 solar-term rows, sorted together by local date (36 rows). */
+function annualDataset(y){
+ var out=[],m,r;
+ for(m=0;m<12;m++){r=dayData(y,m,15);if(r){r.type="Monthly15";r.label=t("monthlyMark");r.termWhen=null;out.push(r);}}
+ var terms=solarTermInstants(y);
+ terms.forEach(function(tm){
+  if(!tm.when)return;
+  var sd=shifted(tm.when);
+  r=dayData(sd.getUTCFullYear(),sd.getUTCMonth(),sd.getUTCDate());
+  if(r){r.type="SolarTerm";r.label=tm.name;r.termWhen=tm.when;out.push(r);}
+ });
+ out.sort(function(a,b){if(a.dateStr<b.dateStr)return -1;if(a.dateStr>b.dateStr)return 1;return a.type==="Monthly15"?-1:1;});
+ return out;
+}
+function pdfRowHtml(r){
+ var term=r.type==="SolarTerm";
+ return "<tr"+(term?" class=\"term\"":"")+"><td>"+r.dateStr+"</td><td class=\"lbl\">"+r.label+"</td><td>"+(term?fmtT24(r.termWhen):"—")+"</td><td>"+fmtT24(r.sunrise)+"</td><td>"+fmtT24(r.solarNoon)+"</td><td>"+fmtT24(r.sunset)+"</td><td>"+(r.dayLenMin==null?"—":fmtDurC(r.dayLenMin*60000))+"</td><td>"+r.noonAlt.toFixed(1)+"°</td><td>"+(r.decl>=0?"+":"")+r.decl.toFixed(2)+"°</td><td>"+fmtRA(r.raH)+"</td><td>"+(r.eot>=0?"+":"")+r.eot.toFixed(1)+" min</td></tr>";
+}
+/* ============ 24 solar terms: solve the Sun's apparent ecliptic longitude crossing each 15-degree multiple (HKO definition) ============ */
+/* Apparent longitude via the Meeus low-precision series (periodic terms + nutation/aberration correction). The SunCalc mean-longitude shortcut used for the dials carries a ~0.44-degree bias that would push term instants ~10 hours late (e.g. spring equinox onto Mar 21), so the term solver uses this series, which lands within minutes of the HKO published instants. */
+function sunAppLon(date){var T=toDays(date)/36525;var L0=280.46646+T*(36000.76983+0.0003032*T);var M=(357.52911+T*(35999.05029-0.0001537*T))*rad;var C=(1.914602-T*(0.004817+0.000014*T))*Math.sin(M)+(0.019993-0.000101*T)*Math.sin(2*M)+0.000289*Math.sin(3*M);var om=(125.04-1934.136*T)*rad;var lam=L0+C-0.00569-0.00478*Math.sin(om);return((lam%360)+360)%360}
+function solarTermInstants(y){
+ var names=t("terms"),lons=[285,300,315,330,345,0,15,30,45,60,75,90,105,120,135,150,165,180,195,210,225,240,255,270];
+ var start=Date.UTC(y,0,1)-2*dayMs,end=Date.UTC(y,11,31,23,59)+2*dayMs;
+ var days=[],prevRaw=sunAppLon(new Date(start)),acc=prevRaw;days.push([start,acc]);
+ for(var tt=start+dayMs;tt<=end;tt+=dayMs){var r=sunAppLon(new Date(tt));var dd=r-prevRaw;if(dd<-180)dd+=360;if(dd>180)dd-=360;acc+=dd;prevRaw=r;days.push([tt,acc]);}
+ var base=days[0][1];
+ return lons.map(function(L,i){
+  var goal=base+(((L-base)%360)+360)%360;
+  for(var k=1;k<days.length;k++){
+   if(days[k-1][1]<=goal&&goal<=days[k][1]){
+    var a0=days[k-1][0],v0=days[k-1][1],a=a0,b=days[k][0];
+    function unwAt(ms){var r2=sunAppLon(new Date(ms));var ref=sunAppLon(new Date(a0));var d2=r2-ref;if(d2<-180)d2+=360;if(d2>180)d2-=360;return v0+d2;}
+    for(var it=0;it<44;it++){var m=(a+b)/2;if(unwAt(m)<goal)a=m;else b=m;}
+    return{name:names[i],lon:L,when:new Date((a+b)/2)};
+   }
+  }
+  return{name:names[i],lon:L,when:null};});
+}
+function fitReport(){document.querySelectorAll("#pdfReport .rptWrap").forEach(function(w){var r=w.querySelector(".rpt");if(!r)return;var sc=w.clientWidth/1080;r.style.transform="scale("+sc+")";w.style.height=(r.offsetHeight*sc)+"px";});}
+window.addEventListener("resize",function(){var ov=$("pdfOverlay");if(ov&&!ov.hidden)fitReport();});
+function openPdfPreview(){
+ var y=shifted(simNow()).getUTCFullYear();pdfKey=curPdfKey();
+ var head="<tr><th>"+t("dateCol")+"</th><th class=\"lbl\">"+t("colLabel")+"</th><th>"+t("colTermTime")+"</th><th>"+t("ev_sunrise")+"</th><th>"+t("solarNoon")+"</th><th>"+t("ev_sunset")+"</th><th>"+t("pdfColLen")+"</th><th>"+t("pdfColAlt")+"</th><th>"+t("decl")+"</th><th>"+t("ra")+"</th><th>"+t("pdfColEoT")+"</th></tr>";
+ var rows=annualDataset(y).map(pdfRowHtml).join("");
+ var offJan=offsetAt(localInstant(y,0,15,720)),offJul=offsetAt(localInstant(y,6,15,720));
+ var tzLine=(state.zone?state.zone+" · ":"")+fmtUtcOff(offJan)+((offJul!==offJan)?" / "+fmtUtcOff(offJul):"");
+ $("pdfReport").innerHTML=
+  '<div class="rptWrap"><div class="rpt"><h1>'+t("pdfTitle")+' · '+y+'</h1><p class="meta">'+t("pdfLoc")+': '+state.place+' · '+state.lat.toFixed(4)+'°, '+state.lon.toFixed(4)+'° · '+t("tzZone")+': '+tzLine+'</p>'
+  +'<h2>'+t("pdfMerged")+'</h2><table><thead>'+head+'</thead><tbody>'+rows+'</tbody></table>'
+  +'<p class="foot">'+t("termsNote")+'</p><p class="foot">'+t("pdfFoot")+'</p></div></div>';
+ $("pdfStale").hidden=true;$("pdfStatus").textContent="";$("pdfLinkWrap").innerHTML="";
+ $("btnPdfSave").disabled=false;
+ $("pdfOverlay").hidden=false;
+ $("pdfOverlay").scrollTop=0;
+ if(window.requestAnimationFrame)requestAnimationFrame(fitReport);else fitReport();
+}
+function savePdf(){
+ var st=$("pdfStatus");
+ if(typeof html2pdf==="undefined"){st.textContent=t("pdfFail");return}
+ st.textContent=t("pdfGenerating");$("pdfLinkWrap").innerHTML="";
+ var y=shifted(simNow()).getUTCFullYear();
+ var fname="sun-annual-report-"+y+".pdf";
+ var wraps=document.querySelectorAll("#pdfReport .rptWrap");wraps.forEach(function(w){w.style.height="";var r=w.querySelector(".rpt");if(r)r.style.transform="";});
+ var opt={margin:10,filename:fname,image:{type:"jpeg",quality:0.96},html2canvas:{scale:2,backgroundColor:"#ffffff"},jsPDF:{unit:"mm",format:"a3",orientation:"landscape"},pagebreak:{mode:["css","legacy"]}};
+ html2pdf().set(opt).from($("pdfReport")).outputPdf("blob").then(function(blob){fitReport();
+  var file=new File([blob],fname,{type:"application/pdf"});
+  function showLink(){var url=URL.createObjectURL(blob);$("pdfLinkWrap").innerHTML='<a class="btn primary" style="text-decoration:none;display:inline-block" href="'+url+'" download="'+fname+'">'+t("pdfDl")+'</a>';st.textContent=t("pdfReady");}
+  function fallbackLink(){saveViaBridge(fname,"application/pdf",blob).then(function(){showLink();});}
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+   navigator.share({files:[file],title:fname}).then(function(){st.textContent=t("pdfShareOk");showLink();}).catch(function(){fallbackLink();});
+  }else{fallbackLink();}
+ }).catch(function(){fitReport();st.textContent=t("pdfFail");});
+}
+/* ============ CSV export: preview first, then download — the same merged annual dataset, machine-clean for Excel and for Revit's Dynamo (CSV/Excel nodes — Revit has no native sun-data table import). The CSV content itself is unchanged: same annualDataset, same 16 columns, same UTF-8 BOM + CRLF. ============ */
+var CSV_HEADERS=["Date","LabelType","Label","SolarTermTime","Sunrise","SolarNoon","Sunset","DayLengthMin","NoonAltitudeDeg","DeclinationDeg","RightAscensionH","EquationOfTimeMin","Location","Latitude","Longitude","TimeZone"];
+var csvKey="";
+var csvPreview=null;
+function csvCell(v){v=(v==null?"":String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+function csvTime(d){return d?fmtT24(d):""}
+function csvEsc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+function buildCsvContent(){
+ var y=shifted(simNow()).getUTCFullYear();
+ var data=annualDataset(y);
+ var tzName=state.zone||fmtUtcOff(state.tz);
+ var rows=[];
+ data.forEach(function(r){
+  rows.push([r.dateStr,r.type,r.label,r.termWhen?fmtT24S(r.termWhen):"",csvTime(r.sunrise),csvTime(r.solarNoon),csvTime(r.sunset),
+   r.dayLenMin==null?"":String(Math.round(r.dayLenMin)),r.noonAlt.toFixed(2),r.decl.toFixed(2),r.raH.toFixed(4),r.eot.toFixed(2),
+   state.place,state.lat.toFixed(4),state.lon.toFixed(4),tzName]);
+ });
+ var lines=[CSV_HEADERS.join(",")];
+ rows.forEach(function(arr){lines.push(arr.map(csvCell).join(","));});
+ var body=lines.join("\r\n")+"\r\n";
+ var slug=String(state.place||"custom").replace(/[\\/:*?"<>|]+/g,"").replace(/\s+/g,"-");
+ var fname="sun-data-"+slug+"-"+y+".csv";
+ return{year:y,data:data,headers:CSV_HEADERS,rows:rows,lines:lines,body:body,csv:"\ufeff"+body,fname:fname};
+}
+function setCsvView(raw){
+ var tw=$("csvTableWrap"),rp=$("csvRaw"),bt=$("btnCsvViewTable"),br=$("btnCsvViewRaw");
+ if(tw)tw.hidden=!!raw; if(rp)rp.hidden=!raw;
+ if(bt){bt.classList.toggle("primary",!raw);} if(br){br.classList.toggle("primary",!!raw);}
+}
+function openCsvPreview(){
+ try{
+  csvPreview=buildCsvContent(); csvKey=curPdfKey();
+  $("csvPreviewTitle").textContent=t("csvPreviewTitle");
+  $("csvPreviewMeta").innerHTML=t("csvMeta").replace("{f}","<b>"+csvEsc(csvPreview.fname)+"</b>").replace("{n}",String(csvPreview.data.length));
+  $("csvPreviewNote").textContent=t("csvNote");
+  var head="<thead><tr>"+csvPreview.headers.map(function(h){return "<th>"+csvEsc(h)+"</th>"}).join("")+"</tr></thead>";
+  var bodyRows=csvPreview.rows.map(function(arr,i){
+   var term=csvPreview.data[i]&&csvPreview.data[i].type==="SolarTerm";
+   return "<tr"+(term?" class=\"term\"":"")+">"+arr.map(function(c){return "<td>"+csvEsc(c)+"</td>"}).join("")+"</tr>";
+  }).join("");
+  $("csvTable").innerHTML=head+"<tbody>"+bodyRows+"</tbody>";
+  /* Raw view: the exact CSV text Dynamo/Excel will read (the invisible UTF-8 BOM is prepended only in the downloaded blob, so the first line below is exactly the header line). */
+  $("csvRaw").textContent=csvPreview.body;
+  $("csvPreviewStatus").textContent="";
+  /* Prepare the blob + persistent fallback link up front (no download happens until the user taps Download or the link). */
+  var pBlob=new Blob([csvPreview.csv],{type:"text/csv;charset=utf-8"});
+  csvPreview.url=URL.createObjectURL(pBlob);
+  $("csvPreviewLinkWrap").innerHTML='<a class="btn small" style="text-decoration:none;display:inline-block" href="'+csvPreview.url+'" download="'+csvEsc(csvPreview.fname)+'">'+csvEsc(t("csvDl"))+'</a>';
+  $("csvStale").hidden=true; $("btnCsvDownload").disabled=false;
+  setCsvView(false);
+  $("csvOverlay").hidden=false; $("csvOverlay").scrollTop=0;
+ }catch(err){ var st=$("csvStatus"); if(st)st.textContent=t("csvFail"); }
+}
+function downloadCsv(){
+ if(!csvPreview)return;
+ var st=$("csvPreviewStatus"),lw=$("csvPreviewLinkWrap");
+ try{
+  var blob=new Blob([csvPreview.csv],{type:"text/csv;charset=utf-8"});
+  var url=csvPreview.url||URL.createObjectURL(blob); csvPreview.url=url;
+  var linkHtml='<a class="btn small" style="text-decoration:none;display:inline-block" href="'+url+'" download="'+csvEsc(csvPreview.fname)+'">'+csvEsc(t("csvDl"))+'</a>';
+  lw.innerHTML=linkHtml;
+  var mainLw=$("csvLinkWrap"); if(mainLw)mainLw.innerHTML=linkHtml;
+  var done=t("csvDone").replace("{f}",csvPreview.fname).replace("{n}",String(csvPreview.data.length));
+  saveViaBridge(csvPreview.fname,"text/csv;charset=utf-8",blob).then(function(viaBridge){
+   if(viaBridge){
+    st.textContent=done;
+    var mainStB=$("csvStatus"); if(mainStB)mainStB.textContent=done;
+    return;
+   }
+   try{
+    var a=document.createElement("a");a.href=url;a.download=csvPreview.fname;document.body.appendChild(a);a.click();a.remove();
+    st.textContent=done;
+    var mainSt=$("csvStatus"); if(mainSt)mainSt.textContent=done;
+   }catch(err2){ if(st)st.textContent=t("csvFail"); }
+  });
+ }catch(err){ if(st)st.textContent=t("csvFail"); }
+}
+$("btnCsv").addEventListener("click",openCsvPreview);
+$("btnCsvDownload").addEventListener("click",downloadCsv);
+$("btnCsvClose").addEventListener("click",function(){$("csvOverlay").hidden=true;});
+$("btnCsvViewTable").addEventListener("click",function(){setCsvView(false);});
+$("btnCsvViewRaw").addEventListener("click",function(){setCsvView(true);});
+$("btnPdf").addEventListener("click",openPdfPreview);
+$("btnPdfSave").addEventListener("click",savePdf);
+$("btnPdfClose").addEventListener("click",function(){$("pdfOverlay").hidden=true;});
+
+applyLang();
+fetchWeather();
+setInterval(fetchWeather,600000);
+render();
+setInterval(function(){if(state.live)render();},1000);
+</script>
+</body>
+</html>
