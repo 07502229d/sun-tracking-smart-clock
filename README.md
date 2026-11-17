@@ -36,14 +36,14 @@ data for any location — no server, all calculations run in the browser/WebView
 
 | File | What it is |
 |---|---|
-| `index.html` | The complete web app as one self-contained file. Open it in any browser. |
-| `sun-tracking-smart-clock-v1.2.apk` | Android APK (WebView shell + the same `index.html` embedded). |
+| `index.html` | The complete web app as one self-contained file (obfuscated release build — see v1.3 note). Open it in any browser. |
+| `sun-tracking-smart-clock-v1.3.apk` | Android APK (WebView shell + the same `index.html` embedded). |
 | `android/` | The APK build project (`build_apk.py`, `AndroidManifest.xml`, `src/MainActivity.java`). |
 
 ## Install the APK
 
-1. Download `sun-tracking-smart-clock-v1.2.apk` (from this repo or the
-   v1.2 Release) to an Android 8.0+ phone.
+1. Download `sun-tracking-smart-clock-v1.3.apk` (from this repo or the
+   v1.3 Release) to an Android 8.0+ phone.
 2. Open the file and allow "install from unknown sources" for the app you
    opened it with, if Android asks.
 3. In the app: GPS button asks for location permission; CSV/PDF saves are
@@ -69,6 +69,15 @@ shell with aapt2/javac/d8 (no Gradle), and signs the APK.
 
 ## Version history
 
+- **v1.3** (versionCode 4) — Release build: the published copy of the web
+  app (this repo's `index.html`, the Netlify deploy and the APK's embedded
+  page) is now obfuscated with the same pipeline used for the Liu Shu apps
+  (javascript-obfuscator: base64 string array, hexadecimal identifiers,
+  control-flow flattening; globals and object keys untouched, so the
+  `SunBridge` native bridge and the Three.js guard behave identically —
+  verified by an A/B run against the readable build). The source stays
+  readable in the Muse app; only the published copy is obfuscated.
+  Footer version line updated to "Sun Tracking Clock V1.3".
 - **v1.2** (versionCode 3) — Legal block added at the end of the page:
   acknowledgements, disclaimer and copyright statement, in all three UI
   languages; the footer version line now tracks the latest release
